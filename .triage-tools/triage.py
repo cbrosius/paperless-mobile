@@ -89,9 +89,23 @@ def run_cmd(
     cmd: list[str], cwd: Path | None = None, check: bool = False
 ) -> subprocess.CompletedProcess:
     use_shell = os.name == "nt" and cmd[0] in ("fvm", "flutter", "dart")
+
+    # Verhindert jegliche interaktive Passwort-/Passphrase-Abfragen im Hintergrund
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    env["SSH_BATCH_MODE"] = "yes"
+    env["GIT_EDITOR"] = "true"
+
+    # Bei git rebase/commit/merge automatisch GPG/SSH-Signierung unterdrücken
+    if cmd and cmd[0] == "git":
+        cmd = ["git", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"] + cmd[1:]
+
     return subprocess.run(
         cmd,
         cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,  # Blockiert niemals auf Benutzereingaben!
         text=True,
         capture_output=True,
         encoding="utf-8",
