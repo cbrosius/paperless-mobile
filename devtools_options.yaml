@@ -1,1 +1,2 @@
-extensions:
+extensions:  triage-skill:
+    path: ./devtools_extensions/triage-skill

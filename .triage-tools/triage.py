@@ -19,15 +19,48 @@ REPORTS_DIR = Path(".triage-tools/reports")
 PR_DOSSIERS_DIR = REPORTS_DIR / "prs"
 
 AREA_RULES = {
-    "area:scanner": ["scanner", "camera", "edge_detection", "crop"],
-    "area:api": ["specs/", "api", "openapi", "dio", "interceptor"],
-    "area:auth": ["auth", "login", "mtls", "certificate", "biometric", "totp", "oidc"],
+    "area:saved-views": [
+        "saved_view",
+        "saved view",
+        "savedview",
+        "gespeicherte ansicht",
+        "showondashboard",
+        "showinsidebar",
+    ],
+    "area:custom-fields": [
+        "custom_field",
+        "custom field",
+        "customfield",
+        "zusatzfeld",
+        "longtext",
+        "monetary",
+    ],
+    "area:scanner": ["scanner", "camera", "edge_detection", "crop", "camscan"],
     "area:inbox": ["inbox"],
-    "area:documents": ["documents", "document_details", "pdf", "pdfrx", "viewer"],
-    "area:labels": ["labels", "correspondent", "document_type", "storage_path", "tags"],
-    "area:custom-fields": ["custom_field"],
-    "area:saved-views": ["saved_view"],
-    "area:i18n": ["l10n", ".arb", "crowdin"],
+    "area:labels": [
+        "labels",
+        "correspondent",
+        "document_type",
+        "document type",
+        "storage_path",
+        "storage path",
+        "tags",
+        "asn",
+    ],
+    "area:auth": [
+        "auth",
+        "login",
+        "logoff",
+        "mtls",
+        "certificate",
+        "biometric",
+        "fingerprint",
+        "totp",
+        "2fa",
+        "oidc",
+        "openid",
+    ],
+    "area:i18n": ["l10n", ".arb", "crowdin", "locale", "transliterate"],
     "area:ci-build": [
         ".github/",
         "fastlane/",
@@ -37,6 +70,18 @@ AREA_RULES = {
         "build.yaml",
         "fvm",
     ],
+    "area:documents": [
+        "documents",
+        "document_details",
+        "pdf",
+        "pdfrx",
+        "viewer",
+        "upload",
+        "download",
+        "thumbnail",
+        "share",
+    ],
+    "area:api": ["specs/", "api", "openapi", "dio", "interceptor", "timeout"],
 }
 
 
@@ -78,12 +123,17 @@ def infer_areas_from_paths(paths: list[str]) -> list[str]:
 
 
 def infer_areas_from_text(title: str, body: str) -> list[str]:
-    text = f"{title}\n{body}".lower()
-    areas = set()
+    title_lower = title.lower()
+    body_lower = body.lower()
+    areas: list[str] = []
+    # Match title first (in specificity order), then body
     for area, keywords in AREA_RULES.items():
-        if any(k in text for k in keywords):
-            areas.add(area)
-    return sorted(areas) or ["area:unclassified"]
+        if any(k in title_lower for k in keywords):
+            areas.append(area)
+    for area, keywords in AREA_RULES.items():
+        if area not in areas and any(k in body_lower for k in keywords):
+            areas.append(area)
+    return areas or ["area:unclassified"]
 
 
 def load_existing_sandbox_checks(report_path: Path) -> dict[int, str]:
@@ -233,7 +283,7 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
 
     run_cmd(["git", "rebase", "--abort"], cwd=SANDBOX_DIR)
     run_cmd(["git", "reset", "--hard"], cwd=SANDBOX_DIR)
-    run_cmd(["git", "clean", "-fd"], cwd=SANDBOX_DIR)
+    # Wichtig: Kein radikales git clean -fd über den ganzen Baum, damit .dart_tool & .fvm erhalten bleiben!
     run_cmd(
         ["git", "checkout", "--detach", f"refs/remotes/upstream/pr/{pr_number}"],
         cwd=SANDBOX_DIR,
@@ -254,7 +304,38 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         write_pr_dossier(pr, changed_files, status, "No Dart files modified.")
         return status
 
-    analyze_res = run_cmd(["fvm", "dart", "analyze"] + dart_files, cwd=SANDBOX_DIR)
+    # 1. Sicherstellen, dass package_config.json im Worktree existiert oder aktualisiert wird
+    if not (SANDBOX_DIR / ".dart_tool" / "package_config.json").exists() or any(
+        "pubspec" in f for f in changed_files
+    ):
+        print(f"   [Sandbox #{pr_number}] Running fvm flutter pub get...")
+        run_cmd(["fvm", "flutter", "pub", "get"], cwd=SANDBOX_DIR)
+
+    # 2. Wenn Models / Codegen-Dateien geändert wurden, build_runner auf dem PR-Stand ausführen
+    needs_codegen = any(
+        "models/" in f or "specs/" in f or "cubit" in f or "bloc" in f
+        for f in dart_files
+    )
+    if needs_codegen:
+        print(
+            f"   [Sandbox #{pr_number}] Model changes detected -> running build_runner..."
+        )
+        run_cmd(
+            [
+                "fvm",
+                "dart",
+                "run",
+                "build_runner",
+                "build",
+                "--delete-conflicting-outputs",
+            ],
+            cwd=SANDBOX_DIR,
+        )
+
+    # 3. fvm flutter analyze auf den geänderten Dateien ausführen
+    analyze_res = run_cmd(
+        ["fvm", "flutter", "analyze", "--no-pub"] + dart_files, cwd=SANDBOX_DIR
+    )
     analyzer_output = (analyze_res.stdout + "\n" + analyze_res.stderr).strip()
     if analyze_res.returncode == 0:
         status = "✅ REBASE_CLEAN & ANALYZE_OK"

@@ -67,7 +67,11 @@ python .triage-tools/triage.py prs
 - **Output:** Updates `.triage-tools/reports/pr_triage.md`.
 
 ### C. Deep PR Verification in Sandbox (`prs --verify`)
-For each targeted PR, fetches `pull/<ID>/head` into `.worktrees/pr-sandbox`, attempts a clean rebase onto `upstream/development`, and runs `fvm dart analyze` on all modified `.dart` files:
+For each targeted PR, fetches `pull/<ID>/head` into `.worktrees/pr-sandbox` and performs an automated verification pipeline:
+1. Rebases the PR branch onto `upstream/development`.
+2. Ensures `.dart_tool/package_config.json` is present (running `fvm flutter pub get` automatically if missing or if any `pubspec` file changed).
+3. Runs `fvm dart run build_runner build --delete-conflicting-outputs` automatically when `models/`, `specs/`, `cubit`, or `bloc` files are modified.
+4. Runs `fvm flutter analyze --no-pub` on all modified `.dart` files.
 
 ```powershell
 # Verify a single PR:
@@ -108,3 +112,4 @@ All generated artifacts live under `.triage-tools/reports/`:
     └── prs/
         └── pr_<NUMBER>.md     # Detailed per-PR review dossier & diff
 ```
+
