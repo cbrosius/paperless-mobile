@@ -311,10 +311,18 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         print(f"   [Sandbox #{pr_number}] Running fvm flutter pub get...")
         run_cmd(["fvm", "flutter", "pub", "get"], cwd=SANDBOX_DIR)
 
-    # 2. Wenn Models / Codegen-Dateien geändert wurden, build_runner auf dem PR-Stand ausführen
+    # 1b. Wenn .arb Sprachdateien geändert wurden -> flutter gen-l10n ausführen
+    if any(f.endswith(".arb") for f in changed_files):
+        print(
+            f"   [Sandbox #{pr_number}] Localization (.arb) changes detected -> running gen-l10n..."
+        )
+        run_cmd(["fvm", "flutter", "gen-l10n"], cwd=SANDBOX_DIR)
+
+    # 2. Wenn Models / Store / Routes / Codegen-Dateien geändert wurden -> build_runner ausführen
     needs_codegen = any(
-        "models/" in f or "specs/" in f or "cubit" in f or "bloc" in f
+        k in f
         for f in dart_files
+        for k in ("models/", "specs/", "cubit", "bloc", "store/", "routes/")
     )
     if needs_codegen:
         print(
