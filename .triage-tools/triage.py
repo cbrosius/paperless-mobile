@@ -99,7 +99,17 @@ def run_cmd(
 
     # Bei git rebase/commit/merge automatisch GPG/SSH-Signierung unterdrücken
     if cmd and cmd[0] == "git":
-        cmd = ["git", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"] + cmd[1:]
+        cmd = [
+            "git",
+            "-c",
+            "user.name=Triage Sandbox",
+            "-c",
+            "user.email=triage@localhost",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "tag.gpgsign=false",
+        ] + cmd[1:]
 
     return subprocess.run(
         cmd,
