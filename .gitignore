@@ -78,3 +78,7 @@ assets/changelogs/*.md
 
 # FVM Version Cache
 .fvm/
+
+# Triage tool reports & sandbox worktrees
+.triage-tools/reports/
+.worktrees/
