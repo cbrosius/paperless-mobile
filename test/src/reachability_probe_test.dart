@@ -82,14 +82,15 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(requestedPaths, ['HEAD /api/', 'HEAD /api/schema/view/']);
+        expect(requestedPaths, ['HEAD /api/']);
       },
     );
 
     test(
       'getApiVersion requests HEAD /api/profile/ instead of /api/schema/ and parses x-api-version',
       () async {
-        final sessionManager = SessionManagerImpl();
+        final sessionManager = SessionManagerImpl()
+          ..updateSettings(baseUrl: 'https://example.com');
         addTearDown(sessionManager.resetSettings);
 
         RequestOptions? capturedOptions;
@@ -120,7 +121,8 @@ void main() {
     test(
       'getApiVersion falls back to minSupportedApiVersion when header is missing',
       () async {
-        final sessionManager = SessionManagerImpl();
+        final sessionManager = SessionManagerImpl()
+          ..updateSettings(baseUrl: 'https://example.com');
         addTearDown(sessionManager.resetSettings);
 
         sessionManager.client.httpClientAdapter = _FakeHttpClientAdapter((
@@ -136,4 +138,3 @@ void main() {
     );
   });
 }
-

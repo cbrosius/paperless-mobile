@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:paperless_mobile/constants.dart';
 import 'package:paperless_mobile/core/global/os_error_codes.dart';
+import 'package:paperless_mobile/core/interceptor/api_version_header.interceptor.dart';
 import 'package:paperless_mobile/core/interceptor/server_reachability_error_interceptor.dart';
 import 'package:paperless_mobile/core/security/session_manager.dart';
 import 'package:paperless_mobile/core/security/session_manager_impl.dart';
@@ -108,8 +109,9 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
         options: Options(
           receiveTimeout: 5.seconds,
           sendTimeout: 5.seconds,
-          followRedirects: false, 
+          followRedirects: false,
           validateStatus: (status) => status == HttpStatus.found,
+          extra: {ApiVersionHeaderInterceptor.skipApiVersionKey: true},
         ),
       );
       if (response.statusCode == HttpStatus.found) {
