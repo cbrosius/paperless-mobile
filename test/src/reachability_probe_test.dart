@@ -53,7 +53,7 @@ void main() {
 
   group('Lightweight reachability & API version probes (#704, #709)', () {
     test(
-      'isPaperlessServerReachable sends GET /api/ with pure application/json Accept header and skipApiVersion',
+      'isPaperlessServerReachable sends HEAD /api/ with pure application/json Accept header and skipApiVersion',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         addTearDown(() => server.close(force: true));
@@ -82,13 +82,13 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(capturedMethod, 'GET');
+        expect(capturedMethod, 'HEAD');
         expect(capturedAcceptHeader, 'application/json');
       },
     );
 
     test(
-      'isPaperlessServerReachable follows 302 redirect from GET /api/ to /api/schema/view/ without requesting /api/schema/',
+      'isPaperlessServerReachable treats 302 redirect from HEAD /api/ as reachable without following redirect',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         addTearDown(() => server.close(force: true));
@@ -118,7 +118,8 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(requestedPaths, ['GET /api/', 'GET /api/schema/view/']);
+        // followRedirects: false ensures only 1 single HTTP request is sent
+        expect(requestedPaths, ['HEAD /api/']);
       },
     );
 
@@ -149,7 +150,7 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(requestedPaths, ['GET /api/', 'HEAD /api/schema/']);
+        expect(requestedPaths, ['HEAD /api/', 'HEAD /api/schema/']);
       },
     );
 
@@ -180,7 +181,7 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(requestedPaths, ['GET /api/', 'HEAD /api/schema/']);
+        expect(requestedPaths, ['HEAD /api/', 'HEAD /api/schema/']);
       },
     );
 

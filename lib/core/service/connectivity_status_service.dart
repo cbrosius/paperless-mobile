@@ -106,17 +106,33 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
       final options = Options(
         receiveTimeout: 5.seconds,
         sendTimeout: 5.seconds,
-        followRedirects: true,
+        followRedirects: false,
+        validateStatus: (status) => status != null && status < 500,
         headers: {HttpHeaders.acceptHeader: 'application/json'},
         extra: {'skipApiVersion': true},
       );
 
       Response<dynamic> response;
       try {
-        // 1. Primary, fast check via /api/
-        response = await manager.client.get('/api/', options: options);
-      } on DioException catch (e) {
+        // 1. Primary, extremely fast check via HEAD /api/ without following redirects
+        response = await manager.client.head('/api/', options: options);
+
+        // 200 OK or 3xx redirect (e.g. 302 to schema/view/) proves the server is reachable
+        if (response.statusCode != null &&
+            (response.statusCode == 200 ||
+                (response.statusCode! >= 300 && response.statusCode! < 400))) {
+          return ReachabilityStatus.reachable;
+        }
+
         // Fallback to /api/schema/ if older v2.x server returns 406 or proxy returns 404
+        if (response.statusCode == 404 || response.statusCode == 406) {
+          response = await manager.client.head(
+            '/api/schema/',
+            options: options,
+          );
+        }
+      } on DioException catch (e) {
+        // Fallback if an older proxy threw DioException on 404/406
         if (e.response?.statusCode == 406 || e.response?.statusCode == 404) {
           response = await manager.client.head(
             '/api/schema/',
@@ -127,7 +143,10 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
         }
       }
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 ||
+          (response.statusCode != null &&
+              response.statusCode! >= 300 &&
+              response.statusCode! < 400)) {
         return ReachabilityStatus.reachable;
       }
       logger.fw(
