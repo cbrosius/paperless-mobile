@@ -84,6 +84,106 @@ AREA_RULES = {
     "area:api": ["specs/", "api", "openapi", "dio", "interceptor", "timeout"],
 }
 
+# Risk detection rules evaluated against the rebased git diff
+RISK_RULES = [
+    # 1. TLS and Certificate Verification Bypasses
+    {
+        "id": "SEC-TLS-BYPASS",
+        "severity": "CRITICAL",
+        "description": "Potential TLS validation or badCertificateCallback bypass",
+        "pattern": re.compile(
+            r"(\+.*badCertificateCallback\s*=\s*\(.*?\)\s*=>\s*true|\+.*allowBadCertificates\s*=\s*true)",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith(".dart"),
+    },
+    # 2. F-Droid & Anti-Features (Google Play Services / MLKit / Firebase)
+    {
+        "id": "FDROID-PROPRIETARY-LIB",
+        "severity": "CRITICAL",
+        "description": "Proprietary Google Play Services / Firebase dependency breaks F-Droid build",
+        "pattern": re.compile(
+            r"(\+.*google_mlkit|\+.*play-services-|\+.*firebase_|\+.*google-services)",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith("pubspec.yaml")
+        or f.endswith(".gradle")
+        or f.endswith(".gradle.kts"),
+    },
+    # 3. Sensitive Data in Logging
+    {
+        "id": "SEC-LOG-CREDENTIALS",
+        "severity": "WARNING",
+        "description": "Possible logging of credentials, auth tokens, or passwords",
+        "pattern": re.compile(
+            r"\+.*(logger\.[a-z]+\(|print\().*(password|authToken|api_key|bearer|private_key)",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith(".dart"),
+    },
+    # 4. Critical Android Permissions & Manifest Changes
+    {
+        "id": "SEC-MANIFEST-PERM",
+        "severity": "WARNING",
+        "description": "New permission or exported component added to AndroidManifest.xml",
+        "pattern": re.compile(
+            r"\+.*<uses-permission|\+.*android:exported=\"true\"",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith("AndroidManifest.xml"),
+    },
+    # 5. Git Submodule Changes (Accidental Pointer Drift)
+    {
+        "id": "REPO-SUBMODULE-DRIFT",
+        "severity": "WARNING",
+        "description": "Submodule commit pointer modified (accidental checkout)",
+        "pattern": re.compile(r"\+Subproject commit [0-9a-f]+", re.IGNORECASE),
+        "file_filter": lambda f: True,
+    },
+    # 6. Global HttpOverrides Modification
+    {
+        "id": "NET-HTTP-OVERRIDES",
+        "severity": "NOTICE",
+        "description": "Global network interceptor/HttpOverrides modified",
+        "pattern": re.compile(r"\+.*HttpOverrides\.global\s*=", re.IGNORECASE),
+        "file_filter": lambda f: f.endswith(".dart"),
+    },
+]
+
+
+def scan_pr_risks(cwd: Path) -> list[dict]:
+    """Inspects the git diff of the PR against upstream/development for security/architectural risks."""
+    diff_res = run_cmd(["git", "diff", "upstream/development...HEAD"], cwd=cwd)
+    if diff_res.returncode != 0:
+        return []
+
+    diff_text = diff_res.stdout
+    findings = []
+    current_file = ""
+
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git a/"):
+            parts = line.split(" b/")
+            current_file = parts[1] if len(parts) > 1 else ""
+            continue
+
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+
+        for rule in RISK_RULES:
+            if rule["file_filter"](current_file):
+                if rule["pattern"].search(line):
+                    findings.append(
+                        {
+                            "id": rule["id"],
+                            "severity": rule["severity"],
+                            "file": current_file,
+                            "description": rule["description"],
+                            "line": line[1:].strip()[:100],
+                        }
+                    )
+    return findings
+
 
 def run_cmd(
     cmd: list[str], cwd: Path | None = None, check: bool = False
@@ -115,7 +215,7 @@ def run_cmd(
         cmd,
         cwd=cwd,
         env=env,
-        stdin=subprocess.DEVNULL,  # Blockiert niemals auf Benutzereingaben!
+        stdin=subprocess.DEVNULL,  # Never block on interactive user input!
         text=True,
         capture_output=True,
         encoding="utf-8",
@@ -296,9 +396,14 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
     if not SANDBOX_DIR.exists():
         return "ERROR: .worktrees/pr-sandbox missing"
 
-    print("   [1/6] Fetching latest refs from upstream/development...")
+    print("   [1/7] Fetching latest refs from upstream/development...")
     fetch_res = run_cmd(
-        ["git", "fetch", "upstream", f"pull/{pr_number}/head:refs/remotes/upstream/pr/{pr_number}"],
+        [
+            "git",
+            "fetch",
+            "upstream",
+            f"pull/{pr_number}/head:refs/remotes/upstream/pr/{pr_number}",
+        ],
         cwd=SANDBOX_DIR,
     )
     if fetch_res.returncode != 0:
@@ -306,9 +411,12 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
 
     run_cmd(["git", "rebase", "--abort"], cwd=SANDBOX_DIR)
     run_cmd(["git", "reset", "--hard"], cwd=SANDBOX_DIR)
-    run_cmd(["git", "checkout", "--detach", f"refs/remotes/upstream/pr/{pr_number}"], cwd=SANDBOX_DIR)
+    run_cmd(
+        ["git", "checkout", "--detach", f"refs/remotes/upstream/pr/{pr_number}"],
+        cwd=SANDBOX_DIR,
+    )
 
-    print("   [2/6] Testing rebase onto upstream/development...")
+    print("   [2/7] Testing rebase onto upstream/development...")
     rebase_res = run_cmd(["git", "rebase", "upstream/development"], cwd=SANDBOX_DIR)
     if rebase_res.returncode != 0:
         conflict_output = (rebase_res.stdout + "\n" + rebase_res.stderr).strip()
@@ -316,53 +424,98 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         write_pr_dossier(pr, changed_files, "❌ REBASE_CONFLICT", conflict_output)
         return "❌ REBASE_CONFLICT"
 
-    dart_files = [f for f in changed_files if f.endswith(".dart") and (SANDBOX_DIR / f).exists()]
+    # Risk Assessment Check
+    print("   [3/7] Scanning diff for security & architectural risks...")
+    risk_findings = scan_pr_risks(cwd=SANDBOX_DIR)
+    critical_risks = [f for f in risk_findings if f["severity"] == "CRITICAL"]
+    warnings = [f for f in risk_findings if f["severity"] == "WARNING"]
+
+    risk_summary_lines: list[str] = []
+    if risk_findings:
+        print(
+            f"   ⚠️ Found {len(risk_findings)} risk flag(s): {len(critical_risks)} CRITICAL, {len(warnings)} WARNING"
+        )
+        for f in risk_findings:
+            print(
+                f"      • [{f['severity']}] {f['id']}: {f['description']} in {f['file']}"
+            )
+            risk_summary_lines.append(
+                f"- **`[{f['severity']}]` {f['id']}** in `{f['file']}`: {f['description']}\n  Snippet: `{f['line']}`"
+            )
+    else:
+        print("   ✅ No high-risk patterns detected in diff.")
+
+    dart_files = [
+        f for f in changed_files if f.endswith(".dart") and (SANDBOX_DIR / f).exists()
+    ]
     if not dart_files:
-        print("   [3/6] No Dart files modified (skipping codegen, analyze & tests).")
+        print("   [4/7] No Dart files modified (skipping codegen, analyze & tests).")
         status = "✅ REBASE_CLEAN (non-Dart PR)"
-        write_pr_dossier(pr, changed_files, status, "No Dart files modified.")
+        write_pr_dossier(
+            pr,
+            changed_files,
+            status,
+            "No Dart files modified.",
+            risk_summary_lines=risk_summary_lines,
+        )
         return status
 
     # 1. Ensure package_config.json exists or update if pubspec changed
-    if not (SANDBOX_DIR / ".dart_tool" / "package_config.json").exists() or any("pubspec" in f for f in changed_files):
-        print("   [3/6] Running 'flutter pub get'...")
+    if not (SANDBOX_DIR / ".dart_tool" / "package_config.json").exists() or any(
+        "pubspec" in f for f in changed_files
+    ):
+        print("   [4/7] Running 'flutter pub get'...")
         run_cmd(["fvm", "flutter", "pub", "get"], cwd=SANDBOX_DIR)
     else:
-        print("   [3/6] Dependencies up to date.")
+        print("   [4/7] Dependencies up to date.")
 
     # 2. Run gen-l10n and/or build_runner if models, routes or localization changed
     needs_l10n = any(f.endswith(".arb") for f in changed_files)
     needs_codegen = any(
-        k in f for f in dart_files for k in ("models/", "specs/", "cubit", "bloc", "store/", "routes/")
+        k in f
+        for f in dart_files
+        for k in ("models/", "specs/", "cubit", "bloc", "store/", "routes/")
     )
     if needs_l10n or needs_codegen:
-        print("   [4/6] Generating model/l10n code (build_runner / gen-l10n)...")
+        print("   [5/7] Generating model/l10n code (build_runner / gen-l10n)...")
         if needs_l10n:
             run_cmd(["fvm", "flutter", "gen-l10n"], cwd=SANDBOX_DIR)
         if needs_codegen:
             run_cmd(
-                ["fvm", "dart", "run", "build_runner", "build", "--delete-conflicting-outputs"],
+                [
+                    "fvm",
+                    "dart",
+                    "run",
+                    "build_runner",
+                    "build",
+                    "--delete-conflicting-outputs",
+                ],
                 cwd=SANDBOX_DIR,
             )
     else:
-        print("   [4/6] No code generation required.")
+        print("   [5/7] No code generation required.")
 
     # 3. Static analysis on modified Dart files
-    print("   [5/6] Running static code analysis (flutter analyze)...")
-    analyze_res = run_cmd(["fvm", "flutter", "analyze", "--no-pub"] + dart_files, cwd=SANDBOX_DIR)
+    print("   [6/7] Running static code analysis (flutter analyze)...")
+    analyze_res = run_cmd(
+        ["fvm", "flutter", "analyze", "--no-pub"] + dart_files, cwd=SANDBOX_DIR
+    )
     analyzer_output = (analyze_res.stdout + "\n" + analyze_res.stderr).strip()
     has_analyze_issues = analyze_res.returncode != 0
 
     # 4. Standard test runner check for touched test files
     test_files = [
-        f for f in changed_files
-        if f.startswith("test/") and f.endswith("_test.dart") and (SANDBOX_DIR / f).exists()
+        f
+        for f in changed_files
+        if f.startswith("test/")
+        and f.endswith("_test.dart")
+        and (SANDBOX_DIR / f).exists()
     ]
     test_output = ""
     has_test_failures = False
 
     if test_files:
-        print(f"   [6/6] Running unit/widget tests ({len(test_files)} files)...")
+        print(f"   [7/7] Running unit/widget tests ({len(test_files)} files)...")
         test_res = run_cmd(["fvm", "flutter", "test"] + test_files, cwd=SANDBOX_DIR)
         test_output = (test_res.stdout + "\n" + test_res.stderr).strip()
         has_test_failures = test_res.returncode != 0
@@ -371,12 +524,14 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         else:
             print("   ❌ Test suite reported failures!")
     else:
-        print("   [6/6] No test files modified in this PR.")
+        print("   [7/7] No test files modified in this PR.")
 
     # Determine final verdict
     combined_log = f"=== ANALYZER OUTPUT ===\n{analyzer_output or 'No issues found.'}\n"
     if test_files:
-        combined_log += f"\n=== TEST RUNNER OUTPUT ===\n{test_output or 'Tests ran clean.'}\n"
+        combined_log += (
+            f"\n=== TEST RUNNER OUTPUT ===\n{test_output or 'Tests ran clean.'}\n"
+        )
 
     if has_test_failures:
         status = "❌ REBASE_CLEAN / TESTS_FAILED"
@@ -391,17 +546,34 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
             status = "✅ REBASE_CLEAN & ANALYZE_OK"
         print(f"   ✨ PR #{pr_number} passed all checks successfully!")
 
-    write_pr_dossier(pr, changed_files, status, combined_log)
+    write_pr_dossier(
+        pr,
+        changed_files,
+        status,
+        combined_log,
+        risk_summary_lines=risk_summary_lines,
+    )
     return status
 
+
 def write_pr_dossier(
-    pr: dict, changed_files: list[str], status: str, check_output: str
+    pr: dict,
+    changed_files: list[str],
+    status: str,
+    check_output: str,
+    risk_summary_lines: list[str] | None = None,
 ) -> None:
-    """Save a detailed per-PR Markdown file including description, analyzer output, and full diff."""
+    """Save a detailed per-PR Markdown file including description, risk assessment, analyzer output, and full diff."""
     PR_DOSSIERS_DIR.mkdir(parents=True, exist_ok=True)
     num = pr["number"]
     diff_res = run_cmd(["gh", "pr", "diff", str(num), "--repo", UPSTREAM_REPO])
     diff_text = diff_res.stdout if diff_res.returncode == 0 else "Could not fetch diff."
+
+    risk_section = "\n## 2b. Risk Assessment\n"
+    if risk_summary_lines:
+        risk_section += "\n".join(risk_summary_lines)
+    else:
+        risk_section += "✅ No suspicious security or build-breaking patterns detected."
 
     dossier = [
         f"# PR #{num}: {pr['title']}",
@@ -413,6 +585,7 @@ def write_pr_dossier(
         pr.get("body") or "*No description provided.*",
         "\n## 2. Touched Files",
         *[f"- `{f}`" for f in changed_files],
+        risk_section,
         "\n## 3. Sandbox Rebase & Analyzer Output",
         "```text",
         check_output or "Clean (no warnings/errors).",
