@@ -21,7 +21,7 @@ class _FakeServerAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     requests.add(options);
-    if (options.path == '/api/schema/') {
+    if (options.path == '/api/profile/') {
       return ResponseBody.fromString(
         '',
         200,
@@ -87,7 +87,7 @@ void main() {
     await sessionManager.client.get('/api/saved_views/');
 
     expect(
-      adapter.requests.where((r) => r.path == '/api/schema/'),
+      adapter.requests.where((r) => r.path == '/api/profile/'),
       hasLength(1),
     );
     expect(await sessionManager.getApiVersion(), 10);
