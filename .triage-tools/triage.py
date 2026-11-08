@@ -296,14 +296,9 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
     if not SANDBOX_DIR.exists():
         return "ERROR: .worktrees/pr-sandbox missing"
 
-    print("   [1/5] Fetching latest refs from upstream/development...")
+    print("   [1/6] Fetching latest refs from upstream/development...")
     fetch_res = run_cmd(
-        [
-            "git",
-            "fetch",
-            "upstream",
-            f"pull/{pr_number}/head:refs/remotes/upstream/pr/{pr_number}",
-        ],
+        ["git", "fetch", "upstream", f"pull/{pr_number}/head:refs/remotes/upstream/pr/{pr_number}"],
         cwd=SANDBOX_DIR,
     )
     if fetch_res.returncode != 0:
@@ -311,13 +306,9 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
 
     run_cmd(["git", "rebase", "--abort"], cwd=SANDBOX_DIR)
     run_cmd(["git", "reset", "--hard"], cwd=SANDBOX_DIR)
-    # Important: Do not run broad git clean -fd so .dart_tool & .fvm remain intact!
-    run_cmd(
-        ["git", "checkout", "--detach", f"refs/remotes/upstream/pr/{pr_number}"],
-        cwd=SANDBOX_DIR,
-    )
+    run_cmd(["git", "checkout", "--detach", f"refs/remotes/upstream/pr/{pr_number}"], cwd=SANDBOX_DIR)
 
-    print("   [2/5] Testing rebase onto upstream/development...")
+    print("   [2/6] Testing rebase onto upstream/development...")
     rebase_res = run_cmd(["git", "rebase", "upstream/development"], cwd=SANDBOX_DIR)
     if rebase_res.returncode != 0:
         conflict_output = (rebase_res.stdout + "\n" + rebase_res.stderr).strip()
@@ -325,64 +316,83 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         write_pr_dossier(pr, changed_files, "❌ REBASE_CONFLICT", conflict_output)
         return "❌ REBASE_CONFLICT"
 
-    dart_files = [
-        f for f in changed_files if f.endswith(".dart") and (SANDBOX_DIR / f).exists()
-    ]
+    dart_files = [f for f in changed_files if f.endswith(".dart") and (SANDBOX_DIR / f).exists()]
     if not dart_files:
-        print("   [3/5] No Dart files modified (skipping codegen & analyzer).")
+        print("   [3/6] No Dart files modified (skipping codegen, analyze & tests).")
         status = "✅ REBASE_CLEAN (non-Dart PR)"
         write_pr_dossier(pr, changed_files, status, "No Dart files modified.")
         return status
 
-    # Check pub get
-    if not (SANDBOX_DIR / ".dart_tool" / "package_config.json").exists() or any(
-        "pubspec" in f for f in changed_files
-    ):
-        print("   [3/5] Running 'flutter pub get'...")
+    # 1. Ensure package_config.json exists or update if pubspec changed
+    if not (SANDBOX_DIR / ".dart_tool" / "package_config.json").exists() or any("pubspec" in f for f in changed_files):
+        print("   [3/6] Running 'flutter pub get'...")
         run_cmd(["fvm", "flutter", "pub", "get"], cwd=SANDBOX_DIR)
+    else:
+        print("   [3/6] Dependencies up to date.")
 
-    # Check codegen
+    # 2. Run gen-l10n and/or build_runner if models, routes or localization changed
+    needs_l10n = any(f.endswith(".arb") for f in changed_files)
     needs_codegen = any(
-        k in f
-        for f in dart_files
-        for k in ("models/", "specs/", "cubit", "bloc", "store/", "routes/")
+        k in f for f in dart_files for k in ("models/", "specs/", "cubit", "bloc", "store/", "routes/")
     )
-    has_arb = any(f.endswith(".arb") for f in changed_files)
-    if needs_codegen or has_arb:
-        print("   [4/5] Generating model code (build_runner / gen-l10n)...")
-        if has_arb:
+    if needs_l10n or needs_codegen:
+        print("   [4/6] Generating model/l10n code (build_runner / gen-l10n)...")
+        if needs_l10n:
             run_cmd(["fvm", "flutter", "gen-l10n"], cwd=SANDBOX_DIR)
         if needs_codegen:
             run_cmd(
-                [
-                    "fvm",
-                    "dart",
-                    "run",
-                    "build_runner",
-                    "build",
-                    "--delete-conflicting-outputs",
-                ],
+                ["fvm", "dart", "run", "build_runner", "build", "--delete-conflicting-outputs"],
                 cwd=SANDBOX_DIR,
             )
     else:
-        print("   [4/5] No code generation required.")
+        print("   [4/6] No code generation required.")
 
-    print("   [5/5] Running static code analysis (flutter analyze)...")
-    analyze_res = run_cmd(
-        ["fvm", "flutter", "analyze", "--no-pub"] + dart_files, cwd=SANDBOX_DIR
-    )
+    # 3. Static analysis on modified Dart files
+    print("   [5/6] Running static code analysis (flutter analyze)...")
+    analyze_res = run_cmd(["fvm", "flutter", "analyze", "--no-pub"] + dart_files, cwd=SANDBOX_DIR)
     analyzer_output = (analyze_res.stdout + "\n" + analyze_res.stderr).strip()
+    has_analyze_issues = analyze_res.returncode != 0
 
-    if analyze_res.returncode == 0:
-        status = "✅ REBASE_CLEAN & ANALYZE_OK"
-        print(f"   ✨ PR #{pr_number} passed successfully!")
+    # 4. Standard test runner check for touched test files
+    test_files = [
+        f for f in changed_files
+        if f.startswith("test/") and f.endswith("_test.dart") and (SANDBOX_DIR / f).exists()
+    ]
+    test_output = ""
+    has_test_failures = False
+
+    if test_files:
+        print(f"   [6/6] Running unit/widget tests ({len(test_files)} files)...")
+        test_res = run_cmd(["fvm", "flutter", "test"] + test_files, cwd=SANDBOX_DIR)
+        test_output = (test_res.stdout + "\n" + test_res.stderr).strip()
+        has_test_failures = test_res.returncode != 0
+        if not has_test_failures:
+            print(f"   ✅ All {len(test_files)} test suite(s) passed!")
+        else:
+            print("   ❌ Test suite reported failures!")
     else:
+        print("   [6/6] No test files modified in this PR.")
+
+    # Determine final verdict
+    combined_log = f"=== ANALYZER OUTPUT ===\n{analyzer_output or 'No issues found.'}\n"
+    if test_files:
+        combined_log += f"\n=== TEST RUNNER OUTPUT ===\n{test_output or 'Tests ran clean.'}\n"
+
+    if has_test_failures:
+        status = "❌ REBASE_CLEAN / TESTS_FAILED"
+        print(f"   ❌ PR #{pr_number} failed unit/widget tests!")
+    elif has_analyze_issues:
         status = "⚠️ REBASE_CLEAN / ANALYZE_ISSUES"
-        print(f"   ⚠️ PR #{pr_number} completed with analyzer issues.")
+        print(f"   ⚠️ PR #{pr_number} finished with analyzer issues.")
+    else:
+        if test_files:
+            status = "✅ REBASE_CLEAN & ANALYZE_OK & TESTS_PASSED"
+        else:
+            status = "✅ REBASE_CLEAN & ANALYZE_OK"
+        print(f"   ✨ PR #{pr_number} passed all checks successfully!")
 
-    write_pr_dossier(pr, changed_files, status, analyzer_output)
+    write_pr_dossier(pr, changed_files, status, combined_log)
     return status
-
 
 def write_pr_dossier(
     pr: dict, changed_files: list[str], status: str, check_output: str
