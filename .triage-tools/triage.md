@@ -70,7 +70,7 @@ python .triage-tools/triage.py prs
 For each targeted PR, fetches `pull/<ID>/head` into `.worktrees/pr-sandbox` and performs an automated 7-step verification pipeline:
 1. Fetches the latest PR head from `upstream`.
 2. Rebases the PR branch onto `upstream/development`.
-3. **Scans the rebased diff for security, F-Droid compliance, and architectural risks** (`SEC-TLS-BYPASS`, `FDROID-PROPRIETARY-LIB`, `SEC-LOG-CREDENTIALS`, `SEC-MANIFEST-PERM`, `REPO-SUBMODULE-DRIFT`, `NET-HTTP-OVERRIDES`).
+3. **Scans the rebased diff for security, F-Droid compliance, and architectural risks** (14 rules: `SEC-TLS-BYPASS`, `FDROID-PROPRIETARY-LIB`, `SEC-LOG-CREDENTIALS`, `SEC-MANIFEST-PERM`, `REPO-SUBMODULE-DRIFT`, `NET-HTTP-OVERRIDES`, `I18N-CROWDIN-BYPASS`, `STORE-MIGRATION-RISK`, `API-STRICT-REQUIRED-FIELD`, `CI-PIPELINE-OR-SIGNING`, `SUPPLY-UNPINNED-GIT-DEP`, `SEC-INSECURE-CREDENTIAL-STORAGE`, `SEC-WEBVIEW-OR-CLEARTEXT`, `PERF-SYNC-FILE-IO`).
 4. Ensures `.dart_tool/package_config.json` is present (running `fvm flutter pub get` automatically if missing or if any `pubspec` file changed).
 5. Runs `fvm flutter gen-l10n` (when `.arb` files changed) and/or `fvm dart run build_runner build --delete-conflicting-outputs` (when `models/`, `specs/`, `cubit`, `bloc`, `store/`, or `routes/` files changed).
 6. Runs `fvm flutter analyze --no-pub` on all modified `.dart` files.

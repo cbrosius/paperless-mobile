@@ -148,6 +148,95 @@ RISK_RULES = [
         "pattern": re.compile(r"\+.*HttpOverrides\.global\s*=", re.IGNORECASE),
         "file_filter": lambda f: f.endswith(".dart"),
     },
+    # 7. Crowdin Localization Bypass (editing non-English .arb files directly)
+    {
+        "id": "I18N-CROWDIN-BYPASS",
+        "severity": "WARNING",
+        "description": "Non-base localization file modified directly (only edit intl_en.arb; translations use Crowdin)",
+        "pattern": None,
+        "file_filter": lambda f: f.startswith("lib/l10n/")
+        and f.endswith(".arb")
+        and f != "lib/l10n/intl_en.arb",
+    },
+    # 8. Persisted Store Migration Risk (new required field without @Default)
+    {
+        "id": "STORE-MIGRATION-RISK",
+        "severity": "WARNING",
+        "description": "New required field without @Default in persisted local store slice may break app upgrades",
+        "pattern": re.compile(r"^\+(?!.*@Default).*?\brequired\s+", re.IGNORECASE),
+        "file_filter": lambda f: f.startswith("lib/core/store/")
+        and f.endswith(".dart")
+        and not f.endswith((".g.dart", ".freezed.dart")),
+    },
+    # 9. Strict Required Field in API Model (without @Default)
+    {
+        "id": "API-STRICT-REQUIRED-FIELD",
+        "severity": "NOTICE",
+        "description": "New required field without @Default in API model may fail on older/newer Paperless-ngx versions",
+        "pattern": re.compile(r"^\+(?!.*@Default).*?\brequired\s+", re.IGNORECASE),
+        "file_filter": lambda f: f.startswith("lib/api/models/")
+        and f.endswith(".dart")
+        and not f.endswith((".g.dart", ".freezed.dart")),
+    },
+    # 10. CI/CD Workflows, Fastlane, or Release Signing Config Modified
+    {
+        "id": "CI-PIPELINE-OR-SIGNING",
+        "severity": "CRITICAL",
+        "description": "CI/CD workflow, Fastlane config, or Android signingConfig modified",
+        "pattern": re.compile(r"\+.*signingConfig", re.IGNORECASE),
+        "file_only_filter": lambda f: f.startswith(".github/workflows/")
+        or f.startswith("fastlane/")
+        or f.endswith("key.properties"),
+        "file_filter": lambda f: f.endswith((".gradle", ".gradle.kts")),
+    },
+    # 11. Unpinned Git or Local Path Dependency in pubspec.yaml
+    {
+        "id": "SUPPLY-UNPINNED-GIT-DEP",
+        "severity": "CRITICAL",
+        "description": "Git or local path dependency added in pubspec.yaml (supply-chain & F-Droid reproducibility risk)",
+        "pattern": re.compile(
+            r"^\+\s*(git:|path:|ref:\s*(main|master|HEAD|develop|development)\b)",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith("pubspec.yaml"),
+    },
+    # 12. Insecure Credential / Token Storage
+    {
+        "id": "SEC-INSECURE-CREDENTIAL-STORAGE",
+        "severity": "CRITICAL",
+        "description": "Sensitive credentials/tokens referenced near unencrypted storage (use FlutterSecureStorage)",
+        "pattern": re.compile(
+            r"\+.*(SharedPreferences|Hive\.box|localStore).*(token|password|secret|passphrase|clientCertificate)",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith(".dart"),
+    },
+    # 13. Insecure WebView Flags or Cleartext HTTP Traffic
+    {
+        "id": "SEC-WEBVIEW-OR-CLEARTEXT",
+        "severity": "WARNING",
+        "description": "Insecure WebView configuration or cleartext HTTP traffic enabled",
+        "pattern": re.compile(
+            r"\+.*(JavaScriptMode\.unrestricted|allowUniversalAccessFromFileURLs|allowFileAccessFromFileURLs|usesCleartextTraffic\s*=\s*\"true\"|NSAllowsArbitraryLoads)",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.endswith(
+            (".dart", "AndroidManifest.xml", "Info.plist")
+        ),
+    },
+    # 14. Synchronous File I/O on UI Thread
+    {
+        "id": "PERF-SYNC-FILE-IO",
+        "severity": "NOTICE",
+        "description": "Synchronous file I/O in app code may block the Flutter UI thread",
+        "pattern": re.compile(
+            r"\+.*\.(readAsBytesSync|readAsStringSync|writeAsBytesSync|writeAsStringSync|listSync)\s*\(",
+            re.IGNORECASE,
+        ),
+        "file_filter": lambda f: f.startswith("lib/")
+        and f.endswith(".dart")
+        and "isolate" not in f.lower(),
+    },
 ]
 
 
@@ -159,20 +248,42 @@ def scan_pr_risks(cwd: Path) -> list[dict]:
 
     diff_text = diff_res.stdout
     findings = []
+    seen_rule_files: set[tuple[str, str]] = set()
     current_file = ""
 
     for line in diff_text.splitlines():
         if line.startswith("diff --git a/"):
             parts = line.split(" b/")
             current_file = parts[1] if len(parts) > 1 else ""
+            for rule in RISK_RULES:
+                file_only_fn = rule.get("file_only_filter")
+                is_file_only = (
+                    rule["pattern"] is None and rule["file_filter"](current_file)
+                ) or (file_only_fn is not None and file_only_fn(current_file))
+                if is_file_only and (rule["id"], current_file) not in seen_rule_files:
+                    seen_rule_files.add((rule["id"], current_file))
+                    findings.append(
+                        {
+                            "id": rule["id"],
+                            "severity": rule["severity"],
+                            "file": current_file,
+                            "description": rule["description"],
+                            "line": f"(file modified: {current_file})",
+                        }
+                    )
             continue
 
         if not line.startswith("+") or line.startswith("+++"):
             continue
 
         for rule in RISK_RULES:
-            if rule["file_filter"](current_file):
+            if (
+                rule["pattern"] is not None
+                and (rule["id"], current_file) not in seen_rule_files
+                and rule["file_filter"](current_file)
+            ):
                 if rule["pattern"].search(line):
+                    seen_rule_files.add((rule["id"], current_file))
                     findings.append(
                         {
                             "id": rule["id"],
