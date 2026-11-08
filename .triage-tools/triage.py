@@ -686,6 +686,17 @@ def write_pr_dossier(
     else:
         risk_section += "✅ No suspicious security or build-breaking patterns detected."
 
+    touched_files_lines = [f"- `{f}`" for f in changed_files]
+    if len(changed_files) > 10:
+        touched_files_block = [
+            "<details>",
+            f"<summary>Show all {len(changed_files)} touched files</summary>\n",
+            *touched_files_lines,
+            "\n</details>",
+        ]
+    else:
+        touched_files_block = touched_files_lines
+
     dossier = [
         f"# PR #{num}: {pr['title']}",
         f"- **Author:** @{pr['author']['login']}",
@@ -695,16 +706,22 @@ def write_pr_dossier(
         "## 1. PR Description",
         pr.get("body") or "*No description provided.*",
         "\n## 2. Touched Files",
-        *[f"- `{f}`" for f in changed_files],
+        *touched_files_block,
         risk_section,
         "\n## 3. Sandbox Rebase & Analyzer Output",
+        "<details>",
+        "<summary>Show analyzer & test runner logs</summary>\n",
         "```text",
         check_output or "Clean (no warnings/errors).",
         "```",
+        "\n</details>",
         "\n## 4. Full Diff",
+        "<details>",
+        f"<summary>Show full diff (+{pr['additions']}/-{pr['deletions']} across {len(changed_files)} file(s))</summary>\n",
         "```diff",
         diff_text.strip(),
         "```",
+        "\n</details>",
     ]
     (PR_DOSSIERS_DIR / f"pr_{num}.md").write_text(
         "\n".join(dossier) + "\n", encoding="utf-8"
@@ -751,20 +768,32 @@ def cmd_issues(_args: argparse.Namespace) -> None:
     for area, items in sorted(by_area.items(), key=lambda x: len(x[1]), reverse=True):
         lines.append(f"- **`{area}`**: {len(items)} issues")
 
+    shown_needs_info = needs_info_candidates[:30]
     lines.append(
         f"\n## 2. `needs-info` Candidates ({len(needs_info_candidates)} issues missing version/details)"
     )
+    lines.append("<details>")
+    lines.append(
+        f"<summary>Show {len(shown_needs_info)} <code>needs-info</code> candidates (of {len(needs_info_candidates)} total)</summary>\n"
+    )
     lines.append("| Issue | Title | Created | Reason |")
     lines.append("| :--- | :--- | :--- | :--- |")
-    for iss in needs_info_candidates[:30]:
+    for iss in shown_needs_info:
         clean_title = iss["title"].replace("\n", " ").replace("\r", " ")[:90]
         lines.append(
             f"| [#{iss['number']}]({iss['url']}) | {clean_title} | {iss['createdAt'][:10]} | Short description or missing version |"
         )
+    lines.append("\n</details>")
 
     lines.append("\n## 3. Issues Grouped by Area")
     for area, items in sorted(by_area.items(), key=lambda x: len(x[1]), reverse=True):
         lines.append(f"\n### `{area}` ({len(items)})")
+        lines.append("<details>")
+        lines.append(
+            f"<summary>Show all {len(items)} issues in <code>{area}</code></summary>\n"
+        )
+        lines.append("<details>")
+        lines.append(f"<summary>Show all {len(items)} issues in <code>{area}</code></summary>\n")
         for iss in items:
             clean_title = iss["title"].replace("\n", " ").replace("\r", " ")[:100]
             existing_labels = ", ".join(l["name"] for l in iss.get("labels", []))
@@ -772,6 +801,7 @@ def cmd_issues(_args: argparse.Namespace) -> None:
             lines.append(
                 f"- [#{iss['number']}]({iss['url']}) **{clean_title}** ({iss['createdAt'][:10]}){lbl_str}"
             )
+        lines.append("\n</details>")
 
     report_path = REPORTS_DIR / "issue_triage.md"
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
