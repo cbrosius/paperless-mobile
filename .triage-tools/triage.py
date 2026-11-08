@@ -240,13 +240,14 @@ RISK_RULES = [
 ]
 
 
-def scan_pr_risks(cwd: Path) -> list[dict]:
+def scan_pr_risks(cwd: Path | None = None, diff_text: str | None = None) -> list[dict]:
     """Inspects the git diff of the PR against upstream/development for security/architectural risks."""
-    diff_res = run_cmd(["git", "diff", "upstream/development...HEAD"], cwd=cwd)
-    if diff_res.returncode != 0:
-        return []
+    if diff_text is None:
+        diff_res = run_cmd(["git", "diff", "upstream/development...HEAD"], cwd=cwd)
+        if diff_res.returncode != 0:
+            return []
+        diff_text = diff_res.stdout
 
-    diff_text = diff_res.stdout
     findings = []
     seen_rule_files: set[tuple[str, str]] = set()
     current_file = ""
@@ -294,6 +295,72 @@ def scan_pr_risks(cwd: Path) -> list[dict]:
                         }
                     )
     return findings
+
+
+def format_risk_assessment_section(risk_findings: list[dict]) -> str:
+    """Formats Section 2b (Risk Assessment) with a detailed pass/fail table for all RISK_RULES."""
+    findings_by_rule: dict[str, list[dict]] = {}
+    for f in risk_findings:
+        findings_by_rule.setdefault(f["id"], []).append(f)
+
+    failed_rules_count = len(findings_by_rule)
+    total_rules = len(RISK_RULES)
+
+    lines = ["\n## 2b. Risk Assessment"]
+    if failed_rules_count == 0:
+        lines.append(
+            f"✅ **All {total_rules}/{total_rules} risk checks passed.** No suspicious security or build-breaking patterns detected.\n"
+        )
+    else:
+        lines.append(
+            f"⚠️ **{failed_rules_count} of {total_rules} risk rule(s) triggered ({len(risk_findings)} finding(s) total):**\n"
+        )
+
+    table_lines = [
+        "| Rule ID | Severity | Status | Description | Findings |",
+        "| :--- | :--- | :--- | :--- | :--- |",
+    ]
+
+    for rule in RISK_RULES:
+        rule_id = rule["id"]
+        severity = rule["severity"]
+        desc = rule["description"].replace("|", "\\|")
+        rule_findings = findings_by_rule.get(rule_id, [])
+
+        if not rule_findings:
+            status_cell = "✅ PASS"
+            findings_cell = "—"
+        else:
+            status_cell = "❌ FAIL" if severity == "CRITICAL" else "⚠️ FAIL"
+            formatted_items = []
+            for rf in rule_findings:
+                safe_line = (
+                    rf["line"]
+                    .replace("|", "\\|")
+                    .replace("`", "'")
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                )
+                formatted_items.append(f"`{rf['file']}` (`{safe_line}`)")
+            findings_cell = "<br>".join(formatted_items)
+
+        table_lines.append(
+            f"| `{rule_id}` | `{severity}` | {status_cell} | {desc} | {findings_cell} |"
+        )
+
+    if failed_rules_count == 0:
+        lines.extend(
+            [
+                "<details>",
+                f"<summary>Show all {total_rules} risk check results</summary>\n",
+                *table_lines,
+                "\n</details>",
+            ]
+        )
+    else:
+        lines.extend(table_lines)
+
+    return "\n".join(lines)
 
 
 def run_cmd(
@@ -541,7 +608,6 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
     critical_risks = [f for f in risk_findings if f["severity"] == "CRITICAL"]
     warnings = [f for f in risk_findings if f["severity"] == "WARNING"]
 
-    risk_summary_lines: list[str] = []
     if risk_findings:
         print(
             f"   ⚠️ Found {len(risk_findings)} risk flag(s): {len(critical_risks)} CRITICAL, {len(warnings)} WARNING"
@@ -549,9 +615,6 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         for f in risk_findings:
             print(
                 f"      • [{f['severity']}] {f['id']}: {f['description']} in {f['file']}"
-            )
-            risk_summary_lines.append(
-                f"- **`[{f['severity']}]` {f['id']}** in `{f['file']}`: {f['description']}\n  Snippet: `{f['line']}`"
             )
     else:
         print("   ✅ No high-risk patterns detected in diff.")
@@ -567,7 +630,7 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
             changed_files,
             status,
             "No Dart files modified.",
-            risk_summary_lines=risk_summary_lines,
+            risk_findings=risk_findings,
         )
         return status
 
@@ -662,7 +725,7 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         changed_files,
         status,
         combined_log,
-        risk_summary_lines=risk_summary_lines,
+        risk_findings=risk_findings,
     )
     return status
 
@@ -672,7 +735,7 @@ def write_pr_dossier(
     changed_files: list[str],
     status: str,
     check_output: str,
-    risk_summary_lines: list[str] | None = None,
+    risk_findings: list[dict] | None = None,
 ) -> None:
     """Save a detailed per-PR Markdown file including description, risk assessment, analyzer output, and full diff."""
     PR_DOSSIERS_DIR.mkdir(parents=True, exist_ok=True)
@@ -680,11 +743,11 @@ def write_pr_dossier(
     diff_res = run_cmd(["gh", "pr", "diff", str(num), "--repo", UPSTREAM_REPO])
     diff_text = diff_res.stdout if diff_res.returncode == 0 else "Could not fetch diff."
 
-    risk_section = "\n## 2b. Risk Assessment\n"
-    if risk_summary_lines:
-        risk_section += "\n".join(risk_summary_lines)
-    else:
-        risk_section += "✅ No suspicious security or build-breaking patterns detected."
+    if risk_findings is None:
+        risk_findings = (
+            scan_pr_risks(diff_text=diff_text) if diff_res.returncode == 0 else []
+        )
+    risk_section = format_risk_assessment_section(risk_findings)
 
     touched_files_lines = [f"- `{f}`" for f in changed_files]
     if len(changed_files) > 10:
@@ -792,8 +855,6 @@ def cmd_issues(_args: argparse.Namespace) -> None:
         lines.append(
             f"<summary>Show all {len(items)} issues in <code>{area}</code></summary>\n"
         )
-        lines.append("<details>")
-        lines.append(f"<summary>Show all {len(items)} issues in <code>{area}</code></summary>\n")
         for iss in items:
             clean_title = iss["title"].replace("\n", " ").replace("\r", " ")[:100]
             existing_labels = ", ".join(l["name"] for l in iss.get("labels", []))
