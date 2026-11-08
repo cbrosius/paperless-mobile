@@ -90,14 +90,14 @@ def run_cmd(
 ) -> subprocess.CompletedProcess:
     use_shell = os.name == "nt" and cmd[0] in ("fvm", "flutter", "dart")
 
-    # Verhindert jegliche interaktive Passwort-/Passphrase-Abfragen im Hintergrund
+    # Prevent any interactive password/passphrase prompts in background
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "never"
     env["SSH_BATCH_MODE"] = "yes"
     env["GIT_EDITOR"] = "true"
 
-    # Bei git rebase/commit/merge automatisch GPG/SSH-Signierung unterdrücken
+    # Suppress GPG/SSH signing automatically during git rebase/commit/merge
     if cmd and cmd[0] == "git":
         cmd = [
             "git",
@@ -290,9 +290,13 @@ def cmd_prs(args: argparse.Namespace) -> None:
 
 def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
     pr_number = pr["number"]
+    title = pr["title"]
+    print(f"\n👉 [Sandbox] Starting verification for PR #{pr_number}: {title}")
+
     if not SANDBOX_DIR.exists():
         return "ERROR: .worktrees/pr-sandbox missing"
 
+    print("   [1/5] Fetching latest refs from upstream/development...")
     fetch_res = run_cmd(
         [
             "git",
@@ -307,12 +311,13 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
 
     run_cmd(["git", "rebase", "--abort"], cwd=SANDBOX_DIR)
     run_cmd(["git", "reset", "--hard"], cwd=SANDBOX_DIR)
-    # Wichtig: Kein radikales git clean -fd über den ganzen Baum, damit .dart_tool & .fvm erhalten bleiben!
+    # Important: Do not run broad git clean -fd so .dart_tool & .fvm remain intact!
     run_cmd(
         ["git", "checkout", "--detach", f"refs/remotes/upstream/pr/{pr_number}"],
         cwd=SANDBOX_DIR,
     )
 
+    print("   [2/5] Testing rebase onto upstream/development...")
     rebase_res = run_cmd(["git", "rebase", "upstream/development"], cwd=SANDBOX_DIR)
     if rebase_res.returncode != 0:
         conflict_output = (rebase_res.stdout + "\n" + rebase_res.stderr).strip()
@@ -324,55 +329,56 @@ def verify_pr_in_sandbox(pr: dict, changed_files: list[str]) -> str:
         f for f in changed_files if f.endswith(".dart") and (SANDBOX_DIR / f).exists()
     ]
     if not dart_files:
+        print("   [3/5] No Dart files modified (skipping codegen & analyzer).")
         status = "✅ REBASE_CLEAN (non-Dart PR)"
         write_pr_dossier(pr, changed_files, status, "No Dart files modified.")
         return status
 
-    # 1. Sicherstellen, dass package_config.json im Worktree existiert oder aktualisiert wird
+    # Check pub get
     if not (SANDBOX_DIR / ".dart_tool" / "package_config.json").exists() or any(
         "pubspec" in f for f in changed_files
     ):
-        print(f"   [Sandbox #{pr_number}] Running fvm flutter pub get...")
+        print("   [3/5] Running 'flutter pub get'...")
         run_cmd(["fvm", "flutter", "pub", "get"], cwd=SANDBOX_DIR)
 
-    # 1b. Wenn .arb Sprachdateien geändert wurden -> flutter gen-l10n ausführen
-    if any(f.endswith(".arb") for f in changed_files):
-        print(
-            f"   [Sandbox #{pr_number}] Localization (.arb) changes detected -> running gen-l10n..."
-        )
-        run_cmd(["fvm", "flutter", "gen-l10n"], cwd=SANDBOX_DIR)
-
-    # 2. Wenn Models / Store / Routes / Codegen-Dateien geändert wurden -> build_runner ausführen
+    # Check codegen
     needs_codegen = any(
         k in f
         for f in dart_files
         for k in ("models/", "specs/", "cubit", "bloc", "store/", "routes/")
     )
-    if needs_codegen:
-        print(
-            f"   [Sandbox #{pr_number}] Model changes detected -> running build_runner..."
-        )
-        run_cmd(
-            [
-                "fvm",
-                "dart",
-                "run",
-                "build_runner",
-                "build",
-                "--delete-conflicting-outputs",
-            ],
-            cwd=SANDBOX_DIR,
-        )
+    has_arb = any(f.endswith(".arb") for f in changed_files)
+    if needs_codegen or has_arb:
+        print("   [4/5] Generating model code (build_runner / gen-l10n)...")
+        if has_arb:
+            run_cmd(["fvm", "flutter", "gen-l10n"], cwd=SANDBOX_DIR)
+        if needs_codegen:
+            run_cmd(
+                [
+                    "fvm",
+                    "dart",
+                    "run",
+                    "build_runner",
+                    "build",
+                    "--delete-conflicting-outputs",
+                ],
+                cwd=SANDBOX_DIR,
+            )
+    else:
+        print("   [4/5] No code generation required.")
 
-    # 3. fvm flutter analyze auf den geänderten Dateien ausführen
+    print("   [5/5] Running static code analysis (flutter analyze)...")
     analyze_res = run_cmd(
         ["fvm", "flutter", "analyze", "--no-pub"] + dart_files, cwd=SANDBOX_DIR
     )
     analyzer_output = (analyze_res.stdout + "\n" + analyze_res.stderr).strip()
+
     if analyze_res.returncode == 0:
         status = "✅ REBASE_CLEAN & ANALYZE_OK"
+        print(f"   ✨ PR #{pr_number} passed successfully!")
     else:
         status = "⚠️ REBASE_CLEAN / ANALYZE_ISSUES"
+        print(f"   ⚠️ PR #{pr_number} completed with analyzer issues.")
 
     write_pr_dossier(pr, changed_files, status, analyzer_output)
     return status

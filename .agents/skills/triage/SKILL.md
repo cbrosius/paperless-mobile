@@ -35,3 +35,8 @@ When asked to deeply review a specific PR `#N`:
    - Analyzer & test results
    - Code quality / architecture notes
    - Clear verdict for `@astubenbord`: **Ready to merge**, **Needs rebase**, or **Needs changes**.
+
+## 4. Live Progress & Feedback Rules
+When executing multi-step triage tasks (such as verifying multiple PRs or scanning all issues):
+1. **Announce before executing:** Always write a short chat message *before* launching a heavy script or batch loop (e.g., *"Ich starte jetzt den Sandbox-Check für die PRs #702, #693 und #622. Ich gehe die Schritte nacheinander durch..."*).
+2. **Break down batches:** If checking multiple PRs, process them with individual `--pr <ID>` flags or output intermediate findings so the user sees live progress instead of waiting for a single monolithic output.
