@@ -23,18 +23,14 @@ Use this skill whenever the user asks to analyze branches, review open Pull Requ
   `python .triage-tools/triage.py issues`
 
 ## 3. Deep-Dive Review Protocol for a Specific PR
-When asked to deeply review a specific PR `#N`:
+When asked to check or review a specific PR `#N`:
 1. Run `python .triage-tools/triage.py prs --verify --pr <N>`.
-2. Inspect the diff via `gh pr diff <N> --repo astubenbord/paperless-mobile`.
-3. Check inside `.worktrees/pr-sandbox`:
-   - If the PR modifies models, API specs (`specs/`), or state classes, verify if code generation is needed: `fvm dart run build_runner build --delete-conflicting-outputs`.
-   - If the PR modifies `.arb` localization files, verify only the base language (`app_en.arb` / `app_de.arb`) is changed unless translations come from Crowdin.
-   - Run relevant tests: `fvm flutter test`.
-4. Draft a concise, constructive GitHub review comment summarizing:
-   - Rebase status against `upstream/development`
-   - Analyzer & test results
-   - Code quality / architecture notes
-   - Clear verdict for `@astubenbord`: **Ready to merge**, **Needs rebase**, or **Needs changes**.
+2. Read the generated dossier `.triage-tools/reports/prs/pr_<N>.md` (or inspect `gh pr diff <N> --repo astubenbord/paperless-mobile`).
+3. **Always include a contextual Risk-Rule & Architecture Analysis in your response**, even when 0 risk rules triggered. Specifically explain:
+   - **Why specific Risk-Rules triggered (or why they rightfully did *not* trigger given the touched files):** Connect the touched areas (e.g., `lib/api/models/`, `lib/core/store/`, `lib/l10n/`, `pubspec.yaml`, `AndroidManifest.xml`, interceptors/auth) to the relevant rules (`API-STRICT-REQUIRED-FIELD`, `STORE-MIGRATION-RISK`, `I18N-CROWDIN-BYPASS`, `FDROID-PROPRIETARY-LIB`, `SEC-*`) and explain *why* the PR's implementation is safe or problematic (e.g., using `@Default(...)` on model fields, keeping only `intl_en.arb` modified, etc.).
+   - **Security & Storage Assessment:** Explicitly state whether networking, TLS/certificate handling, or credential/session storage (`FlutterSecureStorage` vs. unencrypted storage) are affected and whether they remain safe.
+   - **Analyzer & Unit-Test Breakdown:** Summarize `flutter analyze` results and the execution of any unit/widget test suites (`✅ REBASE_CLEAN & ANALYZE_OK & TESTS_PASSED`).
+4. Conclude with a clear verdict for `@astubenbord`: **Ready to merge**, **Needs rebase**, or **Needs changes**.
 
 ## 4. Live Progress & Feedback Rules
 When executing multi-step triage tasks (such as verifying multiple PRs or scanning all issues):
