@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:paperless_mobile/constants.dart';
+import 'package:paperless_mobile/core/interceptor/api_version_header.interceptor.dart';
 import 'package:paperless_mobile/core/security/session_manager_impl.dart';
 import 'package:paperless_mobile/core/service/connectivity_status_service.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
@@ -50,9 +51,44 @@ void main() {
     logger = Logger(level: Level.off);
   });
 
-  group('Lightweight reachability & API version probes (#704)', () {
+  group('Lightweight reachability & API version probes (#704, #709)', () {
     test(
-      'isPaperlessServerReachable follows 302 redirect from HEAD /api/ to /api/schema/view/ without requesting /api/schema/',
+      'isPaperlessServerReachable sends GET /api/ with pure application/json Accept header and skipApiVersion',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+
+        String? capturedAcceptHeader;
+        String? capturedMethod;
+        server.listen((HttpRequest request) async {
+          if (request.uri.path == '/api/') {
+            capturedMethod = request.method;
+            capturedAcceptHeader = request.headers.value(
+              HttpHeaders.acceptHeader,
+            );
+            request.response.statusCode = HttpStatus.ok;
+            request.response.headers.contentType = ContentType.json;
+            request.response.write('{"documents": "/api/documents/"}');
+            await request.response.close();
+          } else {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+          }
+        });
+
+        final service = ConnectivityStatusServiceImpl(_FakeConnectivity());
+        final status = await service.isPaperlessServerReachable(
+          'http://${server.address.address}:${server.port}',
+        );
+
+        expect(status, ReachabilityStatus.reachable);
+        expect(capturedMethod, 'GET');
+        expect(capturedAcceptHeader, 'application/json');
+      },
+    );
+
+    test(
+      'isPaperlessServerReachable follows 302 redirect from GET /api/ to /api/schema/view/ without requesting /api/schema/',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         addTearDown(() => server.close(force: true));
@@ -82,7 +118,125 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(requestedPaths, ['HEAD /api/', 'HEAD /api/schema/view/']);
+        expect(requestedPaths, ['GET /api/', 'GET /api/schema/view/']);
+      },
+    );
+
+    test(
+      'isPaperlessServerReachable falls back to HEAD /api/schema/ when /api/ returns 406',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+
+        final requestedPaths = <String>[];
+        server.listen((HttpRequest request) async {
+          requestedPaths.add('${request.method} ${request.uri.path}');
+          if (request.uri.path == '/api/') {
+            request.response.statusCode = HttpStatus.notAcceptable;
+            await request.response.close();
+          } else if (request.uri.path == '/api/schema/') {
+            request.response.statusCode = HttpStatus.ok;
+            await request.response.close();
+          } else {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+          }
+        });
+
+        final service = ConnectivityStatusServiceImpl(_FakeConnectivity());
+        final status = await service.isPaperlessServerReachable(
+          'http://${server.address.address}:${server.port}',
+        );
+
+        expect(status, ReachabilityStatus.reachable);
+        expect(requestedPaths, ['GET /api/', 'HEAD /api/schema/']);
+      },
+    );
+
+    test(
+      'isPaperlessServerReachable falls back to HEAD /api/schema/ when /api/ returns 404',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+
+        final requestedPaths = <String>[];
+        server.listen((HttpRequest request) async {
+          requestedPaths.add('${request.method} ${request.uri.path}');
+          if (request.uri.path == '/api/') {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+          } else if (request.uri.path == '/api/schema/') {
+            request.response.statusCode = HttpStatus.ok;
+            await request.response.close();
+          } else {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+          }
+        });
+
+        final service = ConnectivityStatusServiceImpl(_FakeConnectivity());
+        final status = await service.isPaperlessServerReachable(
+          'http://${server.address.address}:${server.port}',
+        );
+
+        expect(status, ReachabilityStatus.reachable);
+        expect(requestedPaths, ['GET /api/', 'HEAD /api/schema/']);
+      },
+    );
+
+    test(
+      'isPaperlessServerReachable returns notReachable when both /api/ (406) and fallback /api/schema/ (500) fail',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+
+        server.listen((HttpRequest request) async {
+          if (request.uri.path == '/api/') {
+            request.response.statusCode = HttpStatus.notAcceptable;
+            await request.response.close();
+          } else if (request.uri.path == '/api/schema/') {
+            request.response.statusCode = HttpStatus.internalServerError;
+            await request.response.close();
+          } else {
+            request.response.statusCode = HttpStatus.notFound;
+            await request.response.close();
+          }
+        });
+
+        final service = ConnectivityStatusServiceImpl(_FakeConnectivity());
+        final status = await service.isPaperlessServerReachable(
+          'http://${server.address.address}:${server.port}',
+        );
+
+        expect(status, ReachabilityStatus.notReachable);
+      },
+    );
+
+    test(
+      'ApiVersionHeaderInterceptor preserves pure application/json Accept header when skipApiVersion: true',
+      () async {
+        final dio = Dio();
+        dio.interceptors.add(ApiVersionHeaderInterceptor(() => 9));
+
+        RequestOptions? capturedOptions;
+        dio.httpClientAdapter = _FakeHttpClientAdapter((options, _, _) async {
+          capturedOptions = options;
+          return ResponseBody.fromString('', HttpStatus.ok);
+        });
+
+        await dio.get(
+          'https://example.com/api/',
+          options: Options(
+            headers: {HttpHeaders.acceptHeader: 'application/json'},
+            extra: {'skipApiVersion': true},
+          ),
+        );
+
+        expect(capturedOptions, isNotNull);
+        expect(
+          capturedOptions!.headers[HttpHeaders.acceptHeader],
+          'application/json',
+        );
       },
     );
 
@@ -136,4 +290,3 @@ void main() {
     );
   });
 }
-

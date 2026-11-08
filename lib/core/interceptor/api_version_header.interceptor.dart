@@ -10,6 +10,11 @@ class ApiVersionHeaderInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (options.extra['skipApiVersion'] == true) {
+      handler.next(options);
+      return;
+    }
+
     final apiVersion = getApiVersion();
     if (apiVersion != null) {
       final effectiveApiVersion = min(

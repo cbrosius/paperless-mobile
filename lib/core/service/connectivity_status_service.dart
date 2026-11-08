@@ -103,14 +103,30 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
               additionalHeaders: additionalHeaders,
             );
 
-      final response = await manager.client.head(
-        '/api/',
-        options: Options(
-          receiveTimeout: 5.seconds,
-          sendTimeout: 5.seconds,
-          followRedirects: true,
-        ),
+      final options = Options(
+        receiveTimeout: 5.seconds,
+        sendTimeout: 5.seconds,
+        followRedirects: true,
+        headers: {HttpHeaders.acceptHeader: 'application/json'},
+        extra: {'skipApiVersion': true},
       );
+
+      Response<dynamic> response;
+      try {
+        // 1. Primary, fast check via /api/
+        response = await manager.client.get('/api/', options: options);
+      } on DioException catch (e) {
+        // Fallback to /api/schema/ if older v2.x server returns 406 or proxy returns 404
+        if (e.response?.statusCode == 406 || e.response?.statusCode == 404) {
+          response = await manager.client.head(
+            '/api/schema/',
+            options: options,
+          );
+        } else {
+          rethrow;
+        }
+      }
+
       if (response.statusCode == 200) {
         return ReachabilityStatus.reachable;
       }
