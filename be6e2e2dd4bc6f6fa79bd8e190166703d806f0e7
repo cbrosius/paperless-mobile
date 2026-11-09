@@ -1,0 +1,27 @@
+# Description
+Fixes #512
+
+### Root Cause
+When endpoints return `403 Forbidden` (e.g. `/api/storage_paths/`, `/api/custom_fields/`, `/api/saved_views/`) for users without permissions:
+1. `DioUnauthorizedInterceptor` intercepts HTTP 403 and rejects with `DioException(error: PaperlessUnauthorizedException(message))`.
+2. In `showGenericError`, `error is PaperlessUnauthorizedException` evaluated to `false` when a `DioException` was passed. It fell through to `showSnackBar(context, error.toString())`, displaying raw exception strings or `Instance of 'PaperlessUnauthorizedException'`.
+3. When `PaperlessUnauthorizedException.message` was null, `toString()` produced `'PaperlessUnauthorizedException: null'`.
+4. `UserPermissionExtension` checked exact string equality `p == permission`, missing Django's standard app-prefixed permissions (e.g. `documents.view_storagepath`).
+5. Multiple UI components (`TagsWidget`, `DateAndDocumentTypeLabelWidget`, `DocumentOverviewWidget`, `DocumentFilterForm`, `DocumentEditPage`, and `DocumentsPage.initState`) triggered queries to endpoints without checking `UserPermissionExtension` guards.
+
+### Changes
+1. **`showGenericError`**: Unwraps `DioException.error` and properly falls back to `S.of(context)!.unauthorizedErrorMessage` when `error.message` is null or empty.
+2. **`PaperlessUnauthorizedException`**: Avoids `'PaperlessUnauthorizedException: null'` in `toString()`.
+3. **`UserPermissionExtension`**: Matches both plain (`view_storagepath`) and Django-prefixed (`documents.view_storagepath`) permission strings, and fixes `hasPermissions` evaluation.
+4. **UI Permission Guards**:
+   - `TagsWidget`: Returns empty widget when user lacks `canViewTags`, preventing unnecessary `/api/tags/` queries and error displays.
+   - `DateAndDocumentTypeLabelWidget`: Checks `canViewDocumentTypes` before querying document type repository.
+   - `DocumentOverviewWidget` & `CustomFieldWidget`: Checks `canViewCustomFields` before querying custom fields.
+   - `DocumentFilterForm`: Checks `canViewDocumentTypes` before rendering document type filter.
+   - `DocumentEditPage`: Wraps "Add Custom Field" button in `canViewCustomFields` check.
+   - `DocumentsPage`: Guards saved view refetch in `initState` and wraps `_reloadData` in try-catch with `showGenericError`.
+5. **Unit Tests**: Added test suite covering permission matching, 403 interception, clean string representations, and error presentation.
+
+### Verification
+- `fvm flutter test test/src/features/permissions/unauthorized_403_handling_test.dart` passes (7/7 tests).
+- `fvm flutter analyze lib/` reports 0 errors.
