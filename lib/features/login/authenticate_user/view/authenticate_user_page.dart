@@ -89,47 +89,46 @@ class _AuthenticateUserPageState extends State<AuthenticateUserPage> {
         persistentFooterButtons: [AppLogsFooterWidget().padded()],
         persistentFooterAlignment: AlignmentDirectional.center,
         persistentFooterDecoration: BoxDecoration(),
-        resizeToAvoidBottomInset: false,
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(title: Text(S.of(context)!.connectToPaperless)),
-        body: FormBuilder(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Assets.logos.paperlessLogoGreenPng.image(width: 150, height: 150),
-              Text(
-                'Paperless Mobile',
-                style: Theme.of(context).textTheme.displaySmall,
-              ).padded(),
-              SizedBox(height: 24),
-              Expanded(
-                child: Column(
-                  children: [
-                    AuthenticationCredentialsFormField(
-                      formKey: _formKey,
-                      onSubmitted: _onSubmit,
-                      initialUsername: widget.initialCredentials?.mapOrNull(
-                        password: (value) => value.username,
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      spacing: 8,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () {
-                            context.pop();
-                          },
-                          icon: Icon(Icons.arrow_back),
-                          label: Text(S.of(context)!.edit),
-                        ),
-                        _buildSubmitButton(),
-                      ],
-                    ).padded(),
-                  ],
+        body: SingleChildScrollView(
+          child: FormBuilder(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Assets.logos.paperlessLogoGreenPng.image(
+                  width: 150,
+                  height: 150,
                 ),
-              ),
-            ],
+                Text(
+                  'Paperless Mobile',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ).padded(),
+                const SizedBox(height: 24),
+                AuthenticationCredentialsFormField(
+                  formKey: _formKey,
+                  onSubmitted: _onSubmit,
+                  initialUsername: widget.initialCredentials?.mapOrNull(
+                    password: (value) => value.username,
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        context.pop();
+                      },
+                      icon: const Icon(Icons.arrow_back),
+                      label: Text(S.of(context)!.edit),
+                    ),
+                    _buildSubmitButton(),
+                  ],
+                ).padded(),
+              ],
+            ),
           ),
         ),
       ),
