@@ -1,0 +1,33 @@
+# Description
+Fixes #375, fixes #436
+
+### Root Cause
+When the device locale or user-selected preferred locale in settings is British English (`en_GB`), or any regional/unsupported locale (e.g. `en_US`, `de_DE`, `zh_CN`):
+1. In `AuthenticationCubit.restoreSession`, `LocalNotificationService.notifyDocumentDownload`, and `notifyFileSaved`, the app directly invoked `await S.delegate.load(Locale(localeString))`.
+2. When passed a regional string like `'en_GB'`, the standard Flutter `Locale('en_GB')` constructor assigns `'en_GB'` as the `languageCode` (with `countryCode == null`).
+3. Flutter's generated localization delegate (`_SDelegate` / `lookupS`) only performs switch matches on `languageCode` (`'ar'`, `'ca'`, `'cs'`, `'de'`, `'en'`, etc.). Since `'en_GB'` does not match `'en'`, `lookupS` throws an unhandled `FlutterError`:
+   `S.delegate failed to load unsupported locale "en_GB". This is likely an issue with the localizations generation tool.`
+4. In `AuthenticationCubit.restoreSession()`, this exception aborted session restoration, leaving the app indefinitely stuck at "Restoring session...".
+5. Similarly, downloading a document or scanning/saving a file triggered `LocalNotificationService` to invoke `S.delegate.load(Locale(locale))`, crashing background notification handling.
+6. In `MaterialApp` (`lib/main.dart`), `supportedLocales` hardcoded a static list that omitted several languages present in `S.supportedLocales` (`ar`, `nl`, `pt`, `ro`).
+7. In `LanguageSelectionSetting`, accessing `_languageOptions[settings.preferredLocaleSubtag]!` would crash on null if the user had an unlisted regional locale (e.g. `en_US`, `de_DE`).
+
+### Solution
+1. **Safe Locale Resolution & Loading (`locale_helper.dart`)**:
+   - Implemented `parseLocale(String? code)`: robustly parses both underscore- (`en_GB`) and hyphen-delimited (`en-GB`) locale tags into a proper `Locale(languageCode, countryCode)`.
+   - Implemented `resolveSupportedLocale(dynamic localeOrString)`: checks whether `S.delegate` directly supports the locale, falls back to base language if available, and gracefully defaults to `const Locale('en')`.
+   - Implemented `loadAppLocalizations([dynamic localeOrString])`: safely loads `S` translations without ever crashing or throwing `FlutterError`.
+2. **AuthenticationCubit & LocalNotificationService**:
+   - Replaced raw `S.delegate.load(Locale(...))` calls with `loadAppLocalizations(...)` in `restoreSession`, `notifyDocumentDownload`, and `notifyFileSaved`.
+3. **App-wide Supported Locales (`appSupportedLocales`)**:
+   - Combined `S.supportedLocales` with `Locale('en', 'GB')` so `MaterialApp` and `defaultPreferredLocale` support all generated languages plus British English formatting.
+4. **Crash-proof Settings Widget**:
+   - Updated `LanguageSelectionSetting` to safely resolve base language keys without throwing `Null check operator used on a null value`.
+5. **Unit & Integration Tests**:
+   - Added comprehensive test suite in `test/src/core/translation/locale_helper_test.dart` reproducing the crash and verifying safe fallback and localization loading.
+   - Verified on Android emulator (`emulator-5554`) that `loadAppLocalizations('en_GB')` and `loadAppLocalizations(const Locale('en_GB'))` execute cleanly.
+
+### Verification
+- `fvm flutter test test/src/core/translation/locale_helper_test.dart` passes (10/10 tests).
+- `fvm flutter test integration_test/temp_locale_test.dart -d emulator-5554` passed on Android Emulator.
+- `fvm flutter analyze lib/` reports 0 errors.
