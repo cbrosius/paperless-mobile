@@ -20,6 +20,7 @@ abstract class PaperlessDocumentsApi {
     Iterable<int> tags = const [],
     int? archiveSerialNumber,
     void Function(double progress)? onProgressChanged,
+    CancelToken? cancelToken,
   });
   Future<PaginatedResultList<Document>> getAll([DocumentFilter? options]);
   Future<Document> get(int id, {List<String>? fields});
@@ -73,6 +74,7 @@ class PaperlessDocumentsApiImpl implements PaperlessDocumentsApi {
     Iterable<int> tags = const [],
     int? archiveSerialNumber,
     void Function(double progress)? onProgressChanged,
+    CancelToken? cancelToken,
   }) async {
     final formData = FormData();
     formData.files.add(
@@ -106,6 +108,7 @@ class PaperlessDocumentsApiImpl implements PaperlessDocumentsApi {
         '/api/documents/post_document/',
         data: formData,
         options: Options(sendTimeout: 60.seconds),
+        cancelToken: cancelToken,
         onSendProgress: (count, total) {
           onProgressChanged?.call(count.toDouble() / total.toDouble());
         },

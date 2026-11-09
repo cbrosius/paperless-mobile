@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cached_query_flutter/cached_query_flutter.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/document_extensions.dart';
@@ -189,6 +190,7 @@ class DocumentRepository with ChangeNotifierMixin {
     Iterable<int> tags = const [],
     int? archiveSerialNumber,
     void Function(double progress)? onProgressChanged,
+    CancelToken? cancelToken,
   }) {
     return Mutation<String?, void>(
       key: 'create_document/$filename',
@@ -205,6 +207,7 @@ class DocumentRepository with ChangeNotifierMixin {
           tags: tags,
           archiveSerialNumber: archiveSerialNumber,
           onProgressChanged: onProgressChanged,
+          cancelToken: cancelToken,
         );
       },
     );

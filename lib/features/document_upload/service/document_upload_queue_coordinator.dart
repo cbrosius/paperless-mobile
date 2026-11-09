@@ -31,19 +31,21 @@ class DocumentUploadQueueCoordinator {
               currentItem: index + 1,
               totalItems: items.length,
             ),
+            onUploadComplete: (uploadResult) async {
+              if (context.mounted) {
+                await delegate.onItemUploaded(context, item, uploadResult);
+              }
+            },
           ),
         ),
       );
 
       if (result?.success ?? false) {
-        if (!context.mounted) {
-          return;
-        }
-        await delegate.onItemUploaded(context, item, result!);
-        if (!context.mounted) {
-          return;
-        }
         continue;
+      }
+
+      if (result?.continuedInBackground ?? false) {
+        return;
       }
 
       if (!context.mounted) {

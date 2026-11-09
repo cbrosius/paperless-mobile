@@ -1294,5 +1294,15 @@
   "scannerParameterMinimumAreaFactor": "Minimum Area Factor",
   "@scannerParameterMinimumAreaFactor": {},
   "scannerParameterMinimumAreaFactorDescription": "Specifies the minimum screen surface area percentage required for a document outline to be registered. Higher percentages ignore small rectangular clutter in the background, while lower percentages allow scanning small receipts or documents from further away.",
-  "@scannerParameterMinimumAreaFactorDescription": {}
+  "@scannerParameterMinimumAreaFactorDescription": {},
+  "uploadInProgress": "Upload in progress",
+  "@uploadInProgress": {},
+  "uploadInProgressLeaveDialogContent": "The document is currently being uploaded. You can continue uploading in the background or cancel the upload.",
+  "@uploadInProgressLeaveDialogContent": {},
+  "continueInBackground": "Continue in background",
+  "@continueInBackground": {},
+  "cancelUpload": "Cancel upload",
+  "@cancelUpload": {},
+  "uploadCancelled": "Upload cancelled.",
+  "@uploadCancelled": {}
 }

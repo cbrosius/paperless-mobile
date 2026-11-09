@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -118,6 +119,19 @@ class DocumentScannerCubit extends Cubit<DocumentScannerState> {
         code: ErrorCode.scanRemoveFailed,
         message: error.toString(),
         stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> removeDocumentScanById(String documentScanId) async {
+    final scan = state.documentScans.firstWhereOrNull(
+      (s) => s.id == documentScanId,
+    );
+    if (scan != null) {
+      await removeDocumentScan(scan);
+    } else {
+      await FileService.instance.removeDocumentScanDirectory(
+        documentId: documentScanId,
       );
     }
   }

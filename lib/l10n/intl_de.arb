@@ -1197,5 +1197,15 @@
   "youHaveNoViewsOnYourDashboardYet": "Du hast noch keine Ansichten zu deinem Dashboard hinzugefügt.",
   "@youHaveNoViewsOnYourDashboardYet": {},
   "youreOffline": "Du bist offline.",
-  "@youreOffline": {}
+  "@youreOffline": {},
+  "uploadInProgress": "Upload läuft",
+  "@uploadInProgress": {},
+  "uploadInProgressLeaveDialogContent": "Das Dokument wird derzeit hochgeladen. Du kannst den Upload im Hintergrund fortsetzen oder abbrechen.",
+  "@uploadInProgressLeaveDialogContent": {},
+  "continueInBackground": "Im Hintergrund fortsetzen",
+  "@continueInBackground": {},
+  "cancelUpload": "Upload abbrechen",
+  "@cancelUpload": {},
+  "uploadCancelled": "Upload abgebrochen.",
+  "@uploadCancelled": {}
 }

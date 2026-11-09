@@ -32,6 +32,8 @@ class DocumentUploadRoute extends GoRouteData with $DocumentUploadRoute {
   final String? filename;
   final String? fileExtension;
   final bool? instantUpload;
+  final String? documentScanId;
+  final bool? clearScansOnSuccess;
 
   const DocumentUploadRoute({
     required this.$extra,
@@ -39,6 +41,8 @@ class DocumentUploadRoute extends GoRouteData with $DocumentUploadRoute {
     this.filename,
     this.fileExtension,
     this.instantUpload,
+    this.documentScanId,
+    this.clearScansOnSuccess,
   });
 
   @override
@@ -49,6 +53,8 @@ class DocumentUploadRoute extends GoRouteData with $DocumentUploadRoute {
       filename: filename,
       fileBytes: $extra,
       instantUpload: instantUpload ?? false,
+      documentScanId: documentScanId,
+      clearScansOnSuccess: clearScansOnSuccess ?? false,
     );
   }
 }

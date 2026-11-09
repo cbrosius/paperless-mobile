@@ -343,6 +343,8 @@ class _ScannerPageState extends State<ScannerPage>
         forcePdf: forcePdf,
       ).then((file) => file.bytes),
       fileExtension: _assembledFileExtension(scans, forcePdf: forcePdf),
+      documentScanId: documentScan?.id,
+      clearScansOnSuccess: documentScan == null,
     ).push<DocumentUploadResult>(context);
     if (uploadResult?.success ?? false) {
       if (!context.mounted) return;

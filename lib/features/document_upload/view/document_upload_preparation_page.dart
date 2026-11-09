@@ -1,18 +1,23 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:cached_query_flutter/cached_query_flutter.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/context_extensions.dart';
 import 'package:paperless_mobile/core/extensions/flutter_extensions.dart';
 import 'package:paperless_mobile/core/model/info_message_exception.dart';
-import 'package:paperless_mobile/core/widgets/icon_loading_widget.dart';
+import 'package:paperless_mobile/core/widgets/dialog_utils/dialog_cancel_button.dart';
 import 'package:paperless_mobile/core/widgets/form_builder_fields/form_builder_localized_date_picker.dart';
 import 'package:paperless_mobile/core/widgets/future_or_builder.dart';
+import 'package:paperless_mobile/core/widgets/icon_loading_widget.dart';
+import 'package:paperless_mobile/features/document_scan/cubit/document_scanner_cubit.dart';
 import 'package:paperless_mobile/features/document_upload/model/document_upload_queue.dart';
 import 'package:paperless_mobile/features/labels/tags/view/widgets/tags_form_field.dart';
 import 'package:paperless_mobile/features/labels/view/widgets/single_label_form_field.dart';
@@ -26,8 +31,13 @@ import 'package:paperless_mobile/routing/routes/labels_route.dart';
 class DocumentUploadResult {
   final bool success;
   final String? taskId;
+  final bool continuedInBackground;
 
-  DocumentUploadResult(this.success, this.taskId);
+  DocumentUploadResult(
+    this.success,
+    this.taskId, {
+    this.continuedInBackground = false,
+  });
 }
 
 class DocumentUploadPreparationPage extends StatefulWidget {
@@ -37,6 +47,9 @@ class DocumentUploadPreparationPage extends StatefulWidget {
   final String? fileExtension;
   final bool instantUpload;
   final DocumentUploadQueueProgress? uploadQueueProgress;
+  final String? documentScanId;
+  final bool clearScansOnSuccess;
+  final ValueChanged<DocumentUploadResult>? onUploadComplete;
 
   const DocumentUploadPreparationPage({
     super.key,
@@ -46,12 +59,17 @@ class DocumentUploadPreparationPage extends StatefulWidget {
     this.fileExtension,
     this.instantUpload = false,
     this.uploadQueueProgress,
+    this.documentScanId,
+    this.clearScansOnSuccess = false,
+    this.onUploadComplete,
   });
 
   @override
   State<DocumentUploadPreparationPage> createState() =>
       _DocumentUploadPreparationPageState();
 }
+
+enum _UploadLeaveAction { stay, cancelUpload, continueInBackground }
 
 class _DocumentUploadPreparationPageState
     extends State<DocumentUploadPreparationPage> {
@@ -64,6 +82,8 @@ class _DocumentUploadPreparationPageState
   Map<String, String> _errors = {};
   double? _uploadProgress;
   late bool _syncTitleAndFilename;
+  CancelToken? _cancelToken;
+  bool _isContinuingInBackground = false;
 
   bool get _hasQueuedNextItem => widget.uploadQueueProgress?.hasNext ?? false;
 
@@ -80,245 +100,306 @@ class _DocumentUploadPreparationPageState
     });
   }
 
+  Future<_UploadLeaveAction?> _showLeaveDialog(BuildContext context) {
+    return showDialog<_UploadLeaveAction>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(S.of(dialogContext)!.uploadInProgress),
+        content: Text(S.of(dialogContext)!.uploadInProgressLeaveDialogContent),
+        actions: [
+          DialogCancelButton(
+            onTap: () =>
+                Navigator.of(dialogContext).pop(_UploadLeaveAction.stay),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_UploadLeaveAction.cancelUpload),
+            child: Text(
+              S.of(dialogContext)!.cancelUpload,
+              style: TextStyle(
+                color: Theme.of(dialogContext).colorScheme.error,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_UploadLeaveAction.continueInBackground),
+            child: Text(S.of(dialogContext)!.continueInBackground),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: false,
-      resizeToAvoidBottomInset: true,
-      floatingActionButton: Visibility(
-        visible: MediaQuery.of(context).viewInsets.bottom == 0,
-        child: FloatingActionButton.extended(
-          heroTag: "fab_document_upload",
-          onPressed: _uploadProgress == null ? _onSubmit : null,
-          label: _uploadProgress == null
-              ? Text(
-                  _hasQueuedNextItem
-                      ? '${S.of(context)!.upload} (${S.of(context)!.continueLabel})'
-                      : S.of(context)!.upload,
-                )
-              : Text(S.of(context)!.documentUploadUploading),
-          icon: _uploadProgress == null
-              ? const Icon(Icons.upload)
-              : IconLoadingWidget(progress: _uploadProgress).padded(4),
+    return PopScope(
+      canPop: _uploadProgress == null,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final action = await _showLeaveDialog(context);
+        if (action == _UploadLeaveAction.continueInBackground) {
+          _isContinuingInBackground = true;
+          if (context.mounted) {
+            context.pop(
+              DocumentUploadResult(false, null, continuedInBackground: true),
+            );
+          }
+        } else if (action == _UploadLeaveAction.cancelUpload) {
+          _cancelToken?.cancel('user_cancelled');
+          if (context.mounted) {
+            context.pop(DocumentUploadResult(false, null));
+          }
+        }
+      },
+      child: Scaffold(
+        extendBodyBehindAppBar: false,
+        resizeToAvoidBottomInset: true,
+        floatingActionButton: Visibility(
+          visible: MediaQuery.of(context).viewInsets.bottom == 0,
+          child: FloatingActionButton.extended(
+            heroTag: "fab_document_upload",
+            onPressed: _uploadProgress == null ? _onSubmit : null,
+            label: _uploadProgress == null
+                ? Text(
+                    _hasQueuedNextItem
+                        ? '${S.of(context)!.upload} (${S.of(context)!.continueLabel})'
+                        : S.of(context)!.upload,
+                  )
+                : Text(S.of(context)!.documentUploadUploading),
+            icon: _uploadProgress == null
+                ? const Icon(Icons.upload)
+                : IconLoadingWidget(progress: _uploadProgress).padded(4),
+          ),
         ),
-      ),
-      body: FormBuilder(
-        key: _formKey,
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverOverlapAbsorber(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-              sliver: SliverAppBar(
-                leading: const BackButton(),
-                pinned: true,
-                expandedHeight: 150,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: FutureOrBuilder<Uint8List>(
-                    future: widget.fileBytes,
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const SizedBox.shrink();
-                      }
-                      return Stack(
-                        alignment: AlignmentGeometry.topCenter,
-                        children: [
-                          FileThumbnail(
-                            bytes: snapshot.data!,
-                            fit: BoxFit.fitWidth,
-                            width: MediaQuery.sizeOf(context).width,
-                          ),
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              height: 72,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Colors.black87, Colors.transparent],
+        body: FormBuilder(
+          key: _formKey,
+          child: NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) => [
+              SliverOverlapAbsorber(
+                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                  context,
+                ),
+                sliver: SliverAppBar(
+                  leading: const BackButton(),
+                  pinned: true,
+                  expandedHeight: 150,
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: FutureOrBuilder<Uint8List>(
+                      future: widget.fileBytes,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const SizedBox.shrink();
+                        }
+                        return Stack(
+                          alignment: AlignmentGeometry.topCenter,
+                          children: [
+                            FileThumbnail(
+                              bytes: snapshot.data!,
+                              fit: BoxFit.fitWidth,
+                              width: MediaQuery.sizeOf(context).width,
+                            ),
+                            Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black87,
+                                      Colors.transparent,
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
+                    title: Text(S.of(context)!.prepareDocument),
+                    collapseMode: CollapseMode.pin,
                   ),
-                  title: Text(S.of(context)!.prepareDocument),
-                  collapseMode: CollapseMode.pin,
                 ),
               ),
-            ),
-          ],
-          body: Padding(
-            padding: const EdgeInsets.only(top: 16.0),
-            child: Builder(
-              builder: (context) {
-                return CustomScrollView(
-                  slivers: [
-                    SliverOverlapInjector(
-                      handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                        context,
+            ],
+            body: Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Builder(
+                builder: (context) {
+                  return CustomScrollView(
+                    slivers: [
+                      SliverOverlapInjector(
+                        handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                          context,
+                        ),
                       ),
-                    ),
-                    SliverList.list(
-                      children: [
-                        if (_showQueueProgress)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Chip(
-                              avatar: const Icon(
-                                Icons.queue_play_next,
-                                size: 18,
+                      SliverList.list(
+                        children: [
+                          if (_showQueueProgress)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Chip(
+                                avatar: const Icon(
+                                  Icons.queue_play_next,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  '${widget.uploadQueueProgress!.currentItem}/${widget.uploadQueueProgress!.totalItems}',
+                                ),
                               ),
-                              label: Text(
-                                '${widget.uploadQueueProgress!.currentItem}/${widget.uploadQueueProgress!.totalItems}',
-                              ),
-                            ),
-                          ).paddedOnly(bottom: 12),
-                        // Title
-                        FormBuilderTextField(
-                          autovalidateMode: AutovalidateMode.always,
-                          name: 'title',
-                          initialValue:
-                              widget.title ??
-                              "scan_${fileNameDateFormat.format(_now)}",
-                          validator: (value) {
-                            if (value?.trim().isEmpty ?? true) {
-                              return S.of(context)!.thisFieldIsRequired;
-                            }
-                            return null;
-                          },
-                          decoration: InputDecoration(
-                            labelText: S.of(context)!.title,
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                _formKey.currentState?.fields['title']
-                                    ?.didChange("");
-                                if (_syncTitleAndFilename) {
-                                  _formKey.currentState?.fields[fkFileName]
+                            ).paddedOnly(bottom: 12),
+                          // Title
+                          FormBuilderTextField(
+                            autovalidateMode: AutovalidateMode.always,
+                            name: 'title',
+                            initialValue:
+                                widget.title ??
+                                "scan_${fileNameDateFormat.format(_now)}",
+                            validator: (value) {
+                              if (value?.trim().isEmpty ?? true) {
+                                return S.of(context)!.thisFieldIsRequired;
+                              }
+                              return null;
+                            },
+                            decoration: InputDecoration(
+                              labelText: S.of(context)!.title,
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  _formKey.currentState?.fields['title']
                                       ?.didChange("");
-                                }
-                              },
+                                  if (_syncTitleAndFilename) {
+                                    _formKey.currentState?.fields[fkFileName]
+                                        ?.didChange("");
+                                  }
+                                },
+                              ),
+                              errorText: _errors['title'],
                             ),
-                            errorText: _errors['title'],
-                          ),
-                          onChanged: (value) {
-                            final String transformedValue = _formatFilename(
-                              value ?? '',
-                            );
-                            if (_syncTitleAndFilename) {
-                              _formKey.currentState?.fields[fkFileName]
-                                  ?.didChange(transformedValue);
-                            }
-                          },
-                        ),
-                        // Filename
-                        FormBuilderTextField(
-                          autovalidateMode: AutovalidateMode.always,
-                          readOnly: _syncTitleAndFilename,
-                          enabled: !_syncTitleAndFilename,
-                          name: fkFileName,
-                          decoration: InputDecoration(
-                            labelText: S.of(context)!.fileName,
-                            suffixText: widget.fileExtension,
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => _formKey
-                                  .currentState
-                                  ?.fields[fkFileName]
-                                  ?.didChange(''),
-                            ),
-                          ),
-                          initialValue:
-                              widget.filename ??
-                              "scan_${fileNameDateFormat.format(_now)}",
-                        ),
-                        // Synchronize title and filename
-                        SwitchListTile(
-                          value: _syncTitleAndFilename,
-                          onChanged: (value) {
-                            setState(() => _syncTitleAndFilename = value);
-                            if (_syncTitleAndFilename) {
+                            onChanged: (value) {
                               final String transformedValue = _formatFilename(
-                                _formKey.currentState?.fields['title']?.value
-                                    as String,
+                                value ?? '',
                               );
                               if (_syncTitleAndFilename) {
                                 _formKey.currentState?.fields[fkFileName]
                                     ?.didChange(transformedValue);
                               }
-                            }
-                          },
-                          title: Text(
-                            S.of(context)!.synchronizeTitleAndFilename,
+                            },
                           ),
-                        ),
-                        // Created at
-                        FormBuilderLocalizedDatePicker(
-                          name: 'created',
-                          firstDate: DateTime(1000, 1, 1),
-                          lastDate: DateTime(9999, 12, 31),
-                          labelText: "${S.of(context)!.createdAt} *",
-                          allowUnset: true,
-                        ),
-                        // Correspondent
-                        if (context.uiSettings$.canViewCorrespondents)
-                          SingleLabelFormField<Correspondent>(
-                            query: context.correspondentRepository
-                                .getAllQuery(),
-                            onAddLabel:
-                                context.uiSettings$.canCreateCorrespondents
-                                ? (initialName) => CreateLabelRoute(
-                                    LabelType.correspondent,
-                                    name: initialName,
-                                  ).push<Correspondent>(context)
-                                : null,
-                            addLabelText:
-                                context.uiSettings$.canCreateCorrespondents
-                                ? S.of(context)!.addCorrespondent
-                                : null,
-                            labelText: "${S.of(context)!.correspondent} *",
-                            name: 'correspondent',
-                            prefixIcon: const Icon(Icons.person_outline),
+                          // Filename
+                          FormBuilderTextField(
+                            autovalidateMode: AutovalidateMode.always,
+                            readOnly: _syncTitleAndFilename,
+                            enabled: !_syncTitleAndFilename,
+                            name: fkFileName,
+                            decoration: InputDecoration(
+                              labelText: S.of(context)!.fileName,
+                              suffixText: widget.fileExtension,
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () => _formKey
+                                    .currentState
+                                    ?.fields[fkFileName]
+                                    ?.didChange(''),
+                              ),
+                            ),
+                            initialValue:
+                                widget.filename ??
+                                "scan_${fileNameDateFormat.format(_now)}",
                           ),
-                        // Document type
-                        if (context.uiSettings$.canViewDocumentTypes)
-                          SingleLabelFormField<DocumentType>(
-                            onAddLabel:
-                                context.uiSettings$.canCreateDocumentTypes
-                                ? (initialName) => CreateLabelRoute(
-                                    LabelType.documentType,
-                                    name: initialName,
-                                  ).push<DocumentType>(context)
-                                : null,
-                            addLabelText:
-                                context.uiSettings$.canCreateDocumentTypes
-                                ? S.of(context)!.addDocumentType
-                                : null,
-                            labelText: "${S.of(context)!.documentType} *",
-                            name: 'document_type',
-                            query: context.documentTypeRepository.getAllQuery(),
-                            prefixIcon: const Icon(Icons.description_outlined),
+                          // Synchronize title and filename
+                          SwitchListTile(
+                            value: _syncTitleAndFilename,
+                            onChanged: (value) {
+                              setState(() => _syncTitleAndFilename = value);
+                              if (_syncTitleAndFilename) {
+                                final String transformedValue = _formatFilename(
+                                  _formKey.currentState?.fields['title']?.value
+                                      as String,
+                                );
+                                if (_syncTitleAndFilename) {
+                                  _formKey.currentState?.fields[fkFileName]
+                                      ?.didChange(transformedValue);
+                                }
+                              }
+                            },
+                            title: Text(
+                              S.of(context)!.synchronizeTitleAndFilename,
+                            ),
                           ),
-                        if (context.uiSettings$.canViewTags)
-                          TagsFormField(
-                            name: 'tags',
-                            allowCreation: true,
-                            allowExclude: false,
+                          // Created at
+                          FormBuilderLocalizedDatePicker(
+                            name: 'created',
+                            firstDate: DateTime(1000, 1, 1),
+                            lastDate: DateTime(9999, 12, 31),
+                            labelText: "${S.of(context)!.createdAt} *",
+                            allowUnset: true,
                           ),
-                        Text(
-                          "* ${S.of(context)!.uploadInferValuesHint}",
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.justify,
-                        ).padded(),
-                        const SizedBox(height: 300),
-                      ].padded(),
-                    ),
-                  ],
-                );
-              },
+                          // Correspondent
+                          if (context.uiSettings$.canViewCorrespondents)
+                            SingleLabelFormField<Correspondent>(
+                              query: context.correspondentRepository
+                                  .getAllQuery(),
+                              onAddLabel:
+                                  context.uiSettings$.canCreateCorrespondents
+                                  ? (initialName) => CreateLabelRoute(
+                                      LabelType.correspondent,
+                                      name: initialName,
+                                    ).push<Correspondent>(context)
+                                  : null,
+                              addLabelText:
+                                  context.uiSettings$.canCreateCorrespondents
+                                  ? S.of(context)!.addCorrespondent
+                                  : null,
+                              labelText: "${S.of(context)!.correspondent} *",
+                              name: 'correspondent',
+                              prefixIcon: const Icon(Icons.person_outline),
+                            ),
+                          // Document type
+                          if (context.uiSettings$.canViewDocumentTypes)
+                            SingleLabelFormField<DocumentType>(
+                              onAddLabel:
+                                  context.uiSettings$.canCreateDocumentTypes
+                                  ? (initialName) => CreateLabelRoute(
+                                      LabelType.documentType,
+                                      name: initialName,
+                                    ).push<DocumentType>(context)
+                                  : null,
+                              addLabelText:
+                                  context.uiSettings$.canCreateDocumentTypes
+                                  ? S.of(context)!.addDocumentType
+                                  : null,
+                              labelText: "${S.of(context)!.documentType} *",
+                              name: 'document_type',
+                              query: context.documentTypeRepository
+                                  .getAllQuery(),
+                              prefixIcon: const Icon(
+                                Icons.description_outlined,
+                              ),
+                            ),
+                          if (context.uiSettings$.canViewTags)
+                            TagsFormField(
+                              name: 'tags',
+                              allowCreation: true,
+                              allowExclude: false,
+                            ),
+                          Text(
+                            "* ${S.of(context)!.uploadInferValuesHint}",
+                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.justify,
+                          ).padded(),
+                          const SizedBox(height: 300),
+                        ].padded(),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -330,30 +411,45 @@ class _DocumentUploadPreparationPageState
     if (!(_formKey.currentState?.saveAndValidate() ?? false)) {
       return;
     }
+    _cancelToken = CancelToken();
     setState(() => _uploadProgress = 0);
+
+    final formValues = _formKey.currentState!.value;
+    final correspondent = formValues['correspondent'] as int?;
+    final docType = formValues['document_type'] as int?;
+    final tags = formValues['tags'] as TagsQuery?;
+    final createdAt = formValues['created'] as FormDateTime?;
+    final title = formValues['title'] as String;
+    final asn = formValues['asn'] as int?;
+    final filename = _padWithExtension(
+      _formKey.currentState?.value[fkFileName],
+      widget.fileExtension,
+    );
+
+    final documentRepo = context.documentRepository;
+    DocumentScannerCubit? scannerCubit;
     try {
-      final formValues = _formKey.currentState!.value;
+      scannerCubit = context.read<DocumentScannerCubit>();
+    } catch (_) {}
+    PendingTasksNotifier? tasksNotifier;
+    try {
+      tasksNotifier = context.read<PendingTasksNotifier>();
+    } catch (_) {}
+    final l10n = S.of(context)!;
 
-      final correspondent = formValues['correspondent'] as int?;
-      final docType = formValues['document_type'] as int?;
-      final tags = formValues['tags'] as TagsQuery?;
-      final createdAt = formValues['created'] as FormDateTime?;
-      final title = formValues['title'] as String;
-
-      final asn = formValues['asn'] as int?;
-      final mutationState = await context.documentRepository
+    try {
+      final fileBytes = await widget.fileBytes;
+      final mutationState = await documentRepo
           .createDocumentMutation(
-            await widget.fileBytes,
-            filename: _padWithExtension(
-              _formKey.currentState?.value[fkFileName],
-              widget.fileExtension,
-            ),
+            fileBytes,
+            filename: filename,
             title: title,
             documentType: docType,
             correspondent: correspondent,
             tags: tags?.mapOrNull(ids: (value) => value.include) ?? [],
             createdAt: createdAt?.toDateTime(),
             archiveSerialNumber: asn,
+            cancelToken: _cancelToken,
             onProgressChanged: (progress) {
               if (!mounted) return;
               setState(() => _uploadProgress = progress);
@@ -361,33 +457,59 @@ class _DocumentUploadPreparationPageState
           )
           .mutate();
 
+      if (mutationState is MutationError) {
+        throw (mutationState as MutationError).error ??
+            Exception('Unknown mutation error during document upload');
+      }
+
       final taskId = mutationState.data;
-      if (mounted) {
-        if (taskId != null) {
-          context.read<PendingTasksNotifier>().listenToTaskChanges(taskId);
+      if (taskId != null) {
+        tasksNotifier?.listenToTaskChanges(taskId);
+      }
+
+      if (_isContinuingInBackground) {
+        if (widget.documentScanId != null) {
+          await scannerCubit?.removeDocumentScanById(widget.documentScanId!);
+        } else if (widget.clearScansOnSuccess) {
+          await scannerCubit?.reset();
         }
-        showSnackBar(
-          context,
-          S.of(context)!.documentSuccessfullyUploadedProcessing,
+      }
+
+      final result = DocumentUploadResult(true, taskId);
+      widget.onUploadComplete?.call(result);
+
+      if (mounted) {
+        showSnackBar(context, l10n.documentSuccessfullyUploadedProcessing);
+        context.pop(result);
+      } else {
+        await Fluttertoast.showToast(
+          msg: l10n.documentSuccessfullyUploadedProcessing,
         );
-        context.pop(DocumentUploadResult(true, mutationState.data));
       }
     } on PaperlessApiException catch (error) {
-      if (mounted) {
-        setState(() => _uploadProgress = null);
+      if (_cancelToken?.isCancelled ?? false) {
+        return;
       }
       if (mounted) {
+        setState(() => _uploadProgress = null);
         showInfoMessage(
           context,
           InfoMessageException(code: error.code, message: error.details),
         );
+      } else {
+        await Fluttertoast.showToast(msg: l10n.couldNotUploadDocument);
       }
     } on PaperlessFormValidationException catch (exception) {
-      setState(() {
-        _uploadProgress = null;
-        _errors = exception.validationMessages;
-      });
+      if (mounted) {
+        setState(() {
+          _uploadProgress = null;
+          _errors = exception.validationMessages;
+        });
+      }
     } catch (error, stackTrace) {
+      if (_cancelToken?.isCancelled ?? false) {
+        return;
+      }
       if (mounted) {
         setState(() => _uploadProgress = null);
       }
@@ -404,6 +526,8 @@ class _DocumentUploadPreparationPageState
           const PaperlessApiException.unknown(),
           stackTrace,
         );
+      } else {
+        await Fluttertoast.showToast(msg: l10n.couldNotUploadDocument);
       }
     }
   }
