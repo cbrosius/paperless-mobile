@@ -1,6 +1,5 @@
 import 'package:cached_query_flutter/cached_query_flutter.dart';
 import 'package:equatable/equatable.dart';
-import 'package:flutter/widgets.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/model/info_message_exception.dart';
@@ -12,6 +11,7 @@ import 'package:paperless_mobile/core/store/local_store.dart';
 import 'package:paperless_mobile/core/store/slices/global_settings.dart';
 import 'package:paperless_mobile/core/store/slices/local_user_data.dart';
 import 'package:paperless_mobile/core/store/slices/user_credentials.dart';
+import 'package:paperless_mobile/core/translation/locale_helper.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
 import 'package:paperless_mobile/features/logging/utils/redaction_utils.dart';
 import 'package:paperless_mobile/features/login/model/client_certificate.dart';
@@ -19,7 +19,6 @@ import 'package:paperless_mobile/features/login/model/reachability_status.dart';
 import 'package:paperless_mobile/features/login/server_connection/model/header_entry.dart';
 import 'package:paperless_mobile/features/login/services/authentication_service.dart';
 import 'package:paperless_mobile/features/notifications/services/local_notification_service.dart';
-import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 
 part 'authentication_state.dart';
 
@@ -219,8 +218,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final localUserData = _store.state.localUserData[restoreSessionUserId]!;
 
       if (localUserData.isBiometricAuthenticationEnabled) {
-        final authenticationMessage = (await S.delegate.load(
-          Locale(globalSettings.preferredLocaleSubtag),
+        final authenticationMessage = (await loadAppLocalizations(
+          globalSettings.preferredLocaleSubtag,
         )).verifyYourIdentity;
         final localAuthSuccess = await _localAuthService.authenticateLocalUser(
           authenticationMessage,

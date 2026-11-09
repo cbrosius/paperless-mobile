@@ -47,6 +47,7 @@ import 'package:paperless_mobile/routing/navigation_keys.dart';
 import 'package:paperless_mobile/routing/routes/app_logs_route.dart';
 import 'package:paperless_mobile/routing/routes/auth_route.dart';
 import 'package:paperless_mobile/routing/routes/changelog_route.dart';
+import 'package:paperless_mobile/core/translation/locale_helper.dart';
 import 'package:paperless_mobile/routing/routes/landing_route.dart';
 import 'package:paperless_mobile/routing/routes/logging_out_route.dart';
 import 'package:paperless_mobile/routing/routes/shells/authenticated_route.dart';
@@ -56,10 +57,10 @@ import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 import 'package:provider/provider.dart';
 
 Locale get defaultPreferredLocale {
-  final deviceLocale = _stringToLocale(Platform.localeName);
-  if (S.supportedLocales.contains(deviceLocale)) {
+  final deviceLocale = parseLocale(Platform.localeName);
+  if (appSupportedLocales.contains(deviceLocale)) {
     return deviceLocale;
-  } else if (S.supportedLocales
+  } else if (appSupportedLocales
       .map((e) => e.languageCode)
       .contains(deviceLocale.languageCode)) {
     return Locale(deviceLocale.languageCode);
@@ -96,7 +97,11 @@ void main() async {
       ErrorWidget.builder = (errorDetails) =>
           ErrorFallbackCard(errorDetails: errorDetails);
       final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-      final defaultLocale = defaultPreferredLocale.languageCode;
+      final defaultLocale =
+          defaultPreferredLocale.languageCode == 'en' &&
+              defaultPreferredLocale.countryCode == 'GB'
+          ? 'en_GB'
+          : defaultPreferredLocale.languageCode;
       await initializeDefaultParameters();
       CachedQuery.instance.configFlutter(
         config: GlobalQueryConfig(
@@ -361,7 +366,7 @@ class _GoRouterShellState extends State<GoRouterShell> {
   Widget build(BuildContext context) {
     return GlobalSettingsBuilder(
       builder: (context, settings) {
-        final locale = _stringToLocale(settings.preferredLocaleSubtag);
+        final locale = parseLocale(settings.preferredLocaleSubtag);
         return DynamicColorBuilder(
           builder: (lightDynamic, darkDynamic) {
             return MaterialApp.router(
@@ -390,20 +395,7 @@ class _GoRouterShellState extends State<GoRouterShell> {
                 preferredColorScheme: settings.preferredColorSchemeOption,
               ),
               themeMode: settings.preferredThemeMode,
-              supportedLocales: const [
-                Locale('en'),
-                Locale('de'),
-                Locale('en', 'GB'),
-                Locale('ca'),
-                Locale('cs'),
-                Locale('es'),
-                Locale('fr'),
-                Locale('pl'),
-                Locale('ru'),
-                Locale('tr'),
-                Locale('it'),
-                Locale('sl'),
-              ],
+              supportedLocales: appSupportedLocales,
               localeResolutionCallback: (locale, supportedLocales) {
                 if (locale == null) {
                   return supportedLocales.first;
@@ -437,11 +429,4 @@ class _GoRouterShellState extends State<GoRouterShell> {
       },
     );
   }
-}
-
-Locale _stringToLocale(String code) {
-  final codes = code.split("_");
-  final languageCode = codes[0];
-  final countryCode = codes.length > 1 ? codes[1] : null;
-  return Locale(languageCode, countryCode);
 }

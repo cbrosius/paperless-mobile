@@ -37,37 +37,54 @@ class _LanguageSelectionSettingState extends State<LanguageSelectionSetting> {
   Widget build(BuildContext context) {
     final localStore = context.localStore;
     return GlobalSettingsBuilder(
-      builder: (context, settings) => ListTile(
-        title: Text(S.of(context)!.language),
-        subtitle: Text(_languageOptions[settings.preferredLocaleSubtag]!.name),
-        onTap: () =>
-            showDialog<String>(
-              useRootNavigator: false,
-              context: context,
-              builder: (_) => RadioSettingsDialog<String>(
-                // footer: const Text(
-                //   "* Not fully translated yet. Some words may be displayed in English!",
-                // ),
-                titleText: S.of(context)!.language,
-                options: [
-                  for (var language in _languageOptions.entries)
-                    RadioOption(
-                      value: language.key,
-                      label:
-                          language.value.name +
-                          (language.value.isComplete ? '' : '*'),
-                    ),
-                ],
-                initialValue: settings.preferredLocaleSubtag,
-              ),
-            ).then((value) {
-              if (value != null) {
-                localStore.updateGlobalSettings(
-                  (state) => state.copyWith(preferredLocaleSubtag: value),
-                );
-              }
-            }),
-      ),
+      builder: (context, settings) {
+        final currentOption =
+            _languageOptions[settings.preferredLocaleSubtag] ??
+            _languageOptions[settings.preferredLocaleSubtag
+                .split(RegExp(r'[-_]'))
+                .first] ??
+            _languageOptions['en']!;
+        final initialValue =
+            _languageOptions.containsKey(settings.preferredLocaleSubtag)
+            ? settings.preferredLocaleSubtag
+            : (_languageOptions.containsKey(
+                    settings.preferredLocaleSubtag.split(RegExp(r'[-_]')).first,
+                  )
+                  ? settings.preferredLocaleSubtag.split(RegExp(r'[-_]')).first
+                  : 'en');
+
+        return ListTile(
+          title: Text(S.of(context)!.language),
+          subtitle: Text(currentOption.name),
+          onTap: () =>
+              showDialog<String>(
+                useRootNavigator: false,
+                context: context,
+                builder: (_) => RadioSettingsDialog<String>(
+                  // footer: const Text(
+                  //   "* Not fully translated yet. Some words may be displayed in English!",
+                  // ),
+                  titleText: S.of(context)!.language,
+                  options: [
+                    for (var language in _languageOptions.entries)
+                      RadioOption(
+                        value: language.key,
+                        label:
+                            language.value.name +
+                            (language.value.isComplete ? '' : '*'),
+                      ),
+                  ],
+                  initialValue: initialValue,
+                ),
+              ).then((value) {
+                if (value != null) {
+                  localStore.updateGlobalSettings(
+                    (state) => state.copyWith(preferredLocaleSubtag: value),
+                  );
+                }
+              }),
+        );
+      },
     );
   }
 }
