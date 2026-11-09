@@ -1,0 +1,25 @@
+## Description
+
+Fixes #488.
+
+When uploading scanned documents or files, leaving the `DocumentUploadPreparationPage` before uploading completed previously caused the upload lifecycle to break:
+1. `_onSubmit()` ran directly within the widget state. Once unmounted, task registration (`tasksNotifier.listenToTaskChanges(taskId)`), user notifications, and scanner cleanup (`removeDocumentScan`) were skipped because `mounted` was `false`.
+2. Popping early resolved the route future with `null`, causing `ScannerPage` to keep the scan indefinitely and causing `DocumentUploadQueueCoordinator` to abort remaining queue items.
+3. There was no `CancelToken` wired through `PaperlessDocumentsApi.create` or `DocumentRepository.createDocumentMutation`, meaning uploads could neither be explicitly cancelled nor gracefully detached.
+4. Leaving the page was unintercepted, allowing accidental back swipes or taps during active uploads.
+
+### Changes
+- **PopScope & Navigation Interception**: Wrapped `DocumentUploadPreparationPage` in `PopScope(canPop: _uploadProgress == null)`:
+  - If a user tries to leave while an upload is in progress, an `AlertDialog` prompts with three choices:
+    - **Stay**: Continues viewing upload progress.
+    - **Continue in background**: Pops the page immediately (`DocumentUploadResult(false, null, continuedInBackground: true)`), allowing the upload to complete detached in the background. On background completion, task tracking is registered in `PendingTasksNotifier`, scans are removed via `DocumentScannerCubit`, and user is notified via `Fluttertoast`.
+    - **Cancel upload**: Cancels the in-flight HTTP request via Dio `CancelToken`, pops safely, and keeps the document scan intact without showing error toasts.
+- **Dio `CancelToken` Support**: Added `CancelToken? cancelToken` to:
+  - `PaperlessDocumentsApi.create` / `PaperlessDocumentsApiImpl.create`
+  - `DocumentRepository.createDocumentMutation`
+- **Scanner & Queue Decoupling**:
+  - Added `removeDocumentScanById(String documentScanId)` in `DocumentScannerCubit`.
+  - Added `documentScanId` and `clearScansOnSuccess` to `DocumentUploadRoute` and `DocumentUploadPreparationPage`.
+  - Handled `continuedInBackground` in `DocumentUploadQueueCoordinator.processQueue` without triggering `onQueueCancelled`.
+- **Localization**: Added strings for `uploadInProgress`, `uploadInProgressLeaveDialogContent`, `continueInBackground`, `cancelUpload`, and `uploadCancelled` in English (`intl_en.arb`) and German (`intl_de.arb`).
+- **Unit Tests**: Added comprehensive unit tests in `test/src/features/document_upload/document_upload_background_test.dart` verifying `DocumentUploadResult`, `CancelToken` forwarding, and cancellation state handling.
