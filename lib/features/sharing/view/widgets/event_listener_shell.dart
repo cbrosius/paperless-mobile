@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:listen_sharing_intent/listen_sharing_intent.dart';
+import 'package:paperless_mobile/api/models/status_enum.dart';
+import 'package:paperless_mobile/api/models/tasks_view.dart';
 import 'package:paperless_mobile/constants.dart';
 import 'package:paperless_mobile/core/extensions/context_extensions.dart';
 import 'package:paperless_mobile/core/service/connectivity_status_service.dart';
@@ -106,13 +108,35 @@ class _EventListenerShellState extends State<EventListenerShell> {
     super.dispose();
   }
 
+  final Map<String, TasksView> _previousTasks = {};
+
   void _onTasksChanged() {
     final taskNotifier = context.read<PendingTasksNotifier>();
-    for (var task in taskNotifier.value.values) {
-      context.read<LocalNotificationService>().notifyTaskChanged(
-        task,
-        userId: context.loggedInAppUserId!,
-      );
+    final currentTasks = taskNotifier.value;
+    final notificationService = context.read<LocalNotificationService>();
+    final userId = context.loggedInAppUserId;
+
+    // Cancel notifications for tasks that were removed while still in progress
+    final removedTaskIds = _previousTasks.keys.toSet().difference(
+      currentTasks.keys.toSet(),
+    );
+    for (final taskId in removedTaskIds) {
+      final oldTask = _previousTasks[taskId];
+      if (oldTask != null) {
+        if (oldTask.status == StatusEnum.pending ||
+            oldTask.status == StatusEnum.started) {
+          notificationService.cancelTaskNotification(oldTask.id);
+        }
+      }
+    }
+
+    _previousTasks.clear();
+    _previousTasks.addAll(currentTasks);
+
+    if (userId != null) {
+      for (var task in currentTasks.values) {
+        notificationService.notifyTaskChanged(task, userId: userId);
+      }
     }
   }
 

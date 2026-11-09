@@ -43,19 +43,36 @@ class PaperlessTasksApiImpl implements PaperlessTasksApi {
   @override
   Stream<TasksView> listenForTaskChanges(String taskId) async* {
     bool isCompleted = false;
+    int retryCount = 0;
+    const maxRetries = 15; // Retry for up to 30 seconds
+
     while (!isCompleted) {
-      final tasks = await findAll(
-        TaskFilterOptions(taskName: TaskNameEnum.consumeFile),
-      );
-      if (tasks.isEmpty) {
-        throw Exception("Task with taskId $taskId does not exist.");
-      }
-      final task = tasks.firstWhere((t) => t.taskId == taskId);
-      log("Found new task: ${task.taskId}, ${task.id}, ${task.status}");
-      yield task;
-      if (task.status == StatusEnum.success ||
-          task.status == StatusEnum.failure) {
-        isCompleted = true;
+      try {
+        final tasks = await findAll();
+        final task = tasks.where((t) => t.taskId == taskId).firstOrNull;
+
+        if (task != null) {
+          retryCount = 0;
+          log("Found task: ${task.taskId}, ${task.id}, ${task.status}");
+          yield task;
+          if (task.status == StatusEnum.success ||
+              task.status == StatusEnum.failure) {
+            isCompleted = true;
+            break;
+          }
+        } else {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            log("Task $taskId not found after $maxRetries attempts.");
+            break;
+          }
+        }
+      } catch (e, st) {
+        log("Error polling task $taskId: $e", stackTrace: st);
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          break;
+        }
       }
       await Future.delayed(const Duration(seconds: 2));
     }

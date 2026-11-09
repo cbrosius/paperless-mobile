@@ -14,10 +14,13 @@ import 'package:paperless_mobile/features/notifications/models/notification_payl
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 
 class LocalNotificationService {
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin;
 
-  LocalNotificationService();
+  @visibleForTesting
+  FlutterLocalNotificationsPlugin get plugin => _plugin;
+
+  LocalNotificationService({FlutterLocalNotificationsPlugin? plugin})
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final Map<String, List<int>> _pendingNotifications = {};
 
@@ -212,6 +215,7 @@ class LocalNotificationService {
           maxProgress: 100,
           when: timestampMillis,
           indeterminate: true,
+          autoCancel: true,
           actions: status == StatusEnum.success
               ? [
                   //TODO: Implement once moved to new routing
@@ -232,6 +236,15 @@ class LocalNotificationService {
       payload: jsonEncode(payload),
     );
     _addNotification(userId, id);
+  }
+
+  Future<void> cancelTaskNotification(int taskId) async {
+    final id = taskId + 1000;
+    await _plugin.cancel(id);
+  }
+
+  Future<void> cancelNotification(int id) async {
+    await _plugin.cancel(id);
   }
 
   Future<void> cancelUserNotifications(String userId) async {
