@@ -148,6 +148,9 @@ class _DocumentFilterFormState extends State<DocumentFilterForm> {
   }
 
   Widget _buildDocumentTypeFormField() {
+    if (!context.uiSettings.canViewDocumentTypes) {
+      return const SizedBox.shrink();
+    }
     return MultiLabelFormField<DocumentType>(
       name: DocumentFilterForm.fkDocumentType,
       query: context.documentTypeRepository.getAllQuery(),

@@ -1,3 +1,5 @@
+void main() {}
+
 // import 'package:bloc_test/bloc_test.dart';
 // import 'package:paperless_mobile/api/paperless_api.dart';
 // import 'package:paperless_mobile/features/documents/cubit/documents_cubit.dart';

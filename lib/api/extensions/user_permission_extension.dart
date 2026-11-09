@@ -7,7 +7,10 @@ extension UserPermissionExtension on UiSettingsView {
     }
     final permission = [action.value, target.value].join("_");
 
-    return (permissions?.any((p) => p == permission) ?? false);
+    return (permissions?.any(
+          (p) => p == permission || p.split(".").last == permission,
+        ) ??
+        false);
   }
 
   bool hasPermissions(
@@ -17,11 +20,17 @@ extension UserPermissionExtension on UiSettingsView {
     if (user.isSuperuser ?? false) {
       return true;
     }
-    final permissions = [
+    final requiredPermissions = [
       for (var action in actions)
-        for (var target in targets) [action, target].join("_"),
+        for (var target in targets) [action.value, target.value].join("_"),
     ];
-    return permissions.every((p) => permissions.contains(p));
+    return requiredPermissions.every(
+      (req) =>
+          permissions?.any(
+            (p) => p == req || p.split(".").last == req,
+          ) ??
+          false,
+    );
   }
 
   bool get canViewDocuments =>

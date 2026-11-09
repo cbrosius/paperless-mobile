@@ -1,7 +1,7 @@
 import 'package:cached_query_flutter/cached_query_flutter.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:paperless_mobile/api/models/document.dart';
+import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/context_extensions.dart';
 
 class DateAndDocumentTypeLabelWidget extends StatelessWidget {
@@ -29,7 +29,8 @@ class DateAndDocumentTypeLabelWidget extends StatelessWidget {
       text: TextSpan(
         text: dateText,
         style: subtitleStyle,
-        children: document.documentType != null
+        children: (document.documentType != null &&
+                context.uiSettings$.canViewDocumentTypes)
             ? [
                 const TextSpan(text: '\u30FB'),
                 WidgetSpan(

@@ -22,6 +22,9 @@ class CustomFieldWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.uiSettings$.canViewCustomFields) {
+      return const SizedBox.shrink();
+    }
     return QueryBuilder(
       query: context.customFieldRepository.getAllQuery(),
       builder: (context, state) {

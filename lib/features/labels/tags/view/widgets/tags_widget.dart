@@ -44,6 +44,9 @@ class TagsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.uiSettings$.canViewTags) {
+      return const SizedBox.shrink();
+    }
     // Show skeleton when tagIds are not yet available
     if (tagIds == null) {
       return _TagsSkeletonWidget(
@@ -56,9 +59,7 @@ class TagsWidget extends StatelessWidget {
       query: context.tagRepository.getAllQuery(),
       builder: (context, state) {
         if (state.isError) {
-          return Text(
-            'Could not load tags. ${state.error}',
-          ); // TODO: INTL/error handling
+          return const SizedBox.shrink();
         }
 
         // Show skeleton while loading tag data
@@ -108,6 +109,9 @@ class _MultiLineTagsWidget extends TagsWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.uiSettings$.canViewTags) {
+      return const SizedBox.shrink();
+    }
     // Show skeleton when tagIds are not yet available
     if (tagIds == null) {
       return _MultiLineTagsSkeletonWidget(
@@ -120,7 +124,7 @@ class _MultiLineTagsWidget extends TagsWidget {
       query: context.read<TagRepository>().getAllQuery(),
       builder: (context, state) {
         if (state.isError) {
-          return Text('Could not load tags.'); // TODO: INTL/error handling
+          return const SizedBox.shrink();
         }
 
         // Show skeleton while loading tag data
@@ -170,6 +174,9 @@ class _SliverTagsWidget extends TagsWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!context.uiSettings$.canViewTags) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
     // Show skeleton when tagIds are not yet available
     if (tagIds == null) {
       return _SliverTagsSkeletonWidget(
@@ -182,9 +189,7 @@ class _SliverTagsWidget extends TagsWidget {
       query: context.read<TagRepository>().getAllQuery(),
       builder: (context, state) {
         if (state.isError) {
-          return SliverToBoxAdapter(
-            child: Text('Could not load tags.'), // TODO: INTL/error handling
-          );
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
 
         // Show skeleton while loading tag data

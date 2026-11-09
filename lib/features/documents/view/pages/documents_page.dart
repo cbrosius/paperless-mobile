@@ -65,7 +65,9 @@ class _DocumentsPageState extends State<DocumentsPage> {
         .getAllQuery(filter: context.currentDocumentFilter)
         .refetch();
     context.refetchLabels();
-    context.savedViewRepository.getAllQuery().refetch();
+    if (context.uiSettings.canViewSavedViews) {
+      context.savedViewRepository.getAllQuery().refetch();
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _nestedScrollViewKey.currentState!.innerController.addListener(
@@ -107,23 +109,29 @@ class _DocumentsPageState extends State<DocumentsPage> {
   Future<void> _reloadData() async {
     final currentFilter =
         context.loggedInUserData.appState.currentDocumentFilter;
-    CachedQuery.instance.refetchQueries(
-      keys: [
-        if (context.uiSettings.canViewSavedViews)
-          context.savedViewRepository.queryKey,
-        if (context.uiSettings.canViewCorrespondents)
-          context.correspondentRepository.queryKey,
-        if (context.uiSettings.canViewTags) context.tagRepository.queryKey,
-        if (context.uiSettings.canViewDocumentTypes)
-          context.documentTypeRepository.queryKey,
-        if (context.uiSettings.canViewStoragePaths)
-          context.storagePathRepository.queryKey,
-        if (context.uiSettings.canViewCustomFields)
-          context.customFieldRepository.queryKey,
-        if (context.uiSettings.canViewDocuments)
-          context.documentRepository.queryKeyForFilter(currentFilter),
-      ],
-    );
+    try {
+      await CachedQuery.instance.refetchQueries(
+        keys: [
+          if (context.uiSettings.canViewSavedViews)
+            context.savedViewRepository.queryKey,
+          if (context.uiSettings.canViewCorrespondents)
+            context.correspondentRepository.queryKey,
+          if (context.uiSettings.canViewTags) context.tagRepository.queryKey,
+          if (context.uiSettings.canViewDocumentTypes)
+            context.documentTypeRepository.queryKey,
+          if (context.uiSettings.canViewStoragePaths)
+            context.storagePathRepository.queryKey,
+          if (context.uiSettings.canViewCustomFields)
+            context.customFieldRepository.queryKey,
+          if (context.uiSettings.canViewDocuments)
+            context.documentRepository.queryKeyForFilter(currentFilter),
+        ],
+      );
+    } catch (error, stackTrace) {
+      if (mounted) {
+        showGenericError(context, error, stackTrace);
+      }
+    }
   }
 
   void _scrollExtentChangedListener() {
@@ -345,11 +353,11 @@ class _DocumentsPageState extends State<DocumentsPage> {
         }
 
         if (offset >= max * 0.7) {
-          query.getNextPage().onError<PaperlessApiException>((
+          query.getNextPage().onError<Object>((
             error,
             stackTrace,
           ) {
-            if (context.mounted) showErrorMessage(context, error, stackTrace);
+            if (context.mounted) showGenericError(context, error, stackTrace);
             return null;
           });
           return true;

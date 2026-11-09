@@ -325,15 +325,16 @@ class _DocumentEditPageState extends State<DocumentEditPage>
                             ),
                           SizedBox(height: 24),
                           // Custom fields
-                          if (context.uiSettings$.canViewCustomFields)
+                          if (context.uiSettings$.canViewCustomFields) ...[
                             FormBuilderCustomFieldsField(
                               parentDocumentId: document.id,
                               name: fkCustomFields,
                               initialValue: document.customFields ?? [],
                             ),
-                          _buildAddCustomFieldToDocumentButton(
-                            context,
-                          ).paddedOnly(top: 16),
+                            _buildAddCustomFieldToDocumentButton(
+                              context,
+                            ).paddedOnly(top: 16),
+                          ],
                           const SizedBox(height: 140),
                         ]
                         .expand((child) => [child, const SizedBox(height: 16)])

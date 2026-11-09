@@ -4,5 +4,7 @@ class PaperlessUnauthorizedException implements Exception {
   PaperlessUnauthorizedException(this.message);
 
   @override
-  String toString() => 'PaperlessUnauthorizedException: $message';
+  String toString() => (message != null && message!.isNotEmpty)
+      ? 'PaperlessUnauthorizedException: $message'
+      : 'PaperlessUnauthorizedException';
 }

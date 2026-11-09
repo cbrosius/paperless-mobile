@@ -1,5 +1,6 @@
 import 'dart:developer';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/flutter_extensions.dart';
@@ -85,6 +86,11 @@ void showGenericError(
   dynamic error, [
   StackTrace? stackTrace,
 ]) {
+  if (error is DioException && error.error != null) {
+    showGenericError(context, error.error, stackTrace ?? error.stackTrace);
+    return;
+  }
+
   if (error is PaperlessApiException) {
     showErrorMessage(context, error, stackTrace);
     return;
@@ -101,9 +107,12 @@ void showGenericError(
     return;
   }
   if (error is PaperlessUnauthorizedException) {
+    final message = (error.message != null && error.message!.trim().isNotEmpty)
+        ? error.message!
+        : S.of(context)!.unauthorizedErrorMessage;
     showLocalizedError(
       context,
-      error.message ?? S.of(context)!.unauthorizedErrorMessage,
+      message,
       stackTrace,
     );
     return;

@@ -157,7 +157,7 @@ class DocumentOverviewWidget extends StatelessWidget {
                 label: null,
               ),
             ),
-        if (document.customFields != null)
+        if (uiSettings.canViewCustomFields && document.customFields != null)
           ...document.customFields!.map(
             (instance) => CustomFieldWidget(instance: instance),
           ),
