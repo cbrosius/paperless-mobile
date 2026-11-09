@@ -33,41 +33,75 @@ class _LanguageSelectionSettingState extends State<LanguageSelectionSetting> {
     'nl': LanguageOption('Nederlands', false),
   };
 
+  static LanguageOption _resolveLanguageOption(String? localeSubtag) {
+    if (localeSubtag == null || localeSubtag.isEmpty) {
+      return _languageOptions['en']!;
+    }
+    if (_languageOptions.containsKey(localeSubtag)) {
+      return _languageOptions[localeSubtag]!;
+    }
+    final languageCode = localeSubtag.split(RegExp(r'[-_]')).first;
+    if (_languageOptions.containsKey(languageCode)) {
+      return _languageOptions[languageCode]!;
+    }
+    return _languageOptions['en']!;
+  }
+
+  static String _resolveSelectedKey(String? localeSubtag) {
+    if (localeSubtag != null && _languageOptions.containsKey(localeSubtag)) {
+      return localeSubtag;
+    }
+    if (localeSubtag != null) {
+      final languageCode = localeSubtag.split(RegExp(r'[-_]')).first;
+      if (_languageOptions.containsKey(languageCode)) {
+        return languageCode;
+      }
+    }
+    return 'en';
+  }
+
   @override
   Widget build(BuildContext context) {
     final localStore = context.localStore;
     return GlobalSettingsBuilder(
-      builder: (context, settings) => ListTile(
-        title: Text(S.of(context)!.language),
-        subtitle: Text(_languageOptions[settings.preferredLocaleSubtag]!.name),
-        onTap: () =>
-            showDialog<String>(
-              useRootNavigator: false,
-              context: context,
-              builder: (_) => RadioSettingsDialog<String>(
-                // footer: const Text(
-                //   "* Not fully translated yet. Some words may be displayed in English!",
-                // ),
-                titleText: S.of(context)!.language,
-                options: [
-                  for (var language in _languageOptions.entries)
-                    RadioOption(
-                      value: language.key,
-                      label:
-                          language.value.name +
-                          (language.value.isComplete ? '' : '*'),
-                    ),
-                ],
-                initialValue: settings.preferredLocaleSubtag,
-              ),
-            ).then((value) {
-              if (value != null) {
-                localStore.updateGlobalSettings(
-                  (state) => state.copyWith(preferredLocaleSubtag: value),
-                );
-              }
-            }),
-      ),
+      builder: (context, settings) {
+        final currentOption = _resolveLanguageOption(
+          settings.preferredLocaleSubtag,
+        );
+        final selectedKey = _resolveSelectedKey(settings.preferredLocaleSubtag);
+
+        return ListTile(
+          title: Text(S.of(context)!.language),
+          subtitle: Text(currentOption.name),
+          onTap: () =>
+              showDialog<String>(
+                useRootNavigator: false,
+                context: context,
+                builder: (_) => RadioSettingsDialog<String>(
+                  // footer: const Text(
+                  //   "* Not fully translated yet. Some words may be displayed in English!",
+                  // ),
+                  titleText: S.of(context)!.language,
+                  options: [
+                    for (var language in _languageOptions.entries)
+                      RadioOption(
+                        value: language.key,
+                        label:
+                            language.value.name +
+                            (language.value.isComplete ? '' : '*'),
+                      ),
+                  ],
+                  initialValue: selectedKey,
+                ),
+              ).then((value) {
+                if (value != null) {
+                  localStore.updateGlobalSettings(
+                    (state) => state.copyWith(preferredLocaleSubtag: value),
+                  );
+                }
+              }),
+        );
+      },
     );
   }
 }
