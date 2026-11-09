@@ -1,0 +1,33 @@
+# Description
+Fixes #666
+
+### Root Cause
+When connecting to a Paperless server secured by mutual TLS (mTLS) with a client certificate (.pfx/.p12):
+1. **Incorrect `SecurityContext` initialization sequence**: In `SessionManagerImpl.updateSettings()`, `usePrivateKeyBytes()` was called before `useCertificateChainBytes()`. In Dart's BoringSSL binding for PKCS#12 bundles, calling `usePrivateKeyBytes()` first on a protected or empty-passphrase archive causes an immediate `ArgumentError: Expected private key, but none was found` rather than a standard `TlsException`. Furthermore, `setTrustedCertificatesBytes(clientCertificate.bytes)` was mistakenly called with the user's client certificate rather than server root CAs.
+2. **Unhandled `ArgumentError` and `FormatException`**: `ConnectivityStatusServiceImpl.isPaperlessServerReachable()` only caught `DioException` and `TlsException`. Any `ArgumentError` or `FormatException` thrown during certificate parsing in `updateSettings()` bypassed the exception handling.
+3. **Silent UI failure**: In `ServerConnectionCubit.checkReachability()`, unhandled exceptions caused the cubit to emit `ServerConnectionInitial()`. Because `_ServerConnectionPageState` only presents error feedback when the state is `ServerConnectionUnreachable`, the loading spinner vanished silently and no error message was shown to the user.
+4. **File extension restriction**: `ClientCertificateFormField` strictly enforced `.pfx`, rejecting `.p12` files commonly exported by browsers (e.g. Firefox) and operating systems (e.g. macOS Keychain).
+
+### Solution
+- **Fixed `SecurityContext` initialization**:
+  - Reordered calls in `SessionManagerImpl` to invoke `useCertificateChainBytes()` prior to `usePrivateKeyBytes()`.
+  - Added fallback handling between `null` and `""` when the passphrase is null or empty to maximize compatibility with unencrypted PKCS#12 containers across platforms.
+  - Removed erroneous `setTrustedCertificatesBytes()` call for client certificates.
+- **Robust error mapping in `ConnectivityStatusService`**:
+  - Caught `ArgumentError`, `FormatException`, and `TlsException` when configuring client certificates, mapping them cleanly to `ReachabilityStatus.invalidClientCertificateConfiguration`.
+  - Wrapped `getPaperlessServerApiVersion()` defensively so unexpected certificate failures gracefully fall back without throwing.
+- **Improved error handling in `ServerConnectionCubit`**:
+  - Emitted `ServerConnectionUnreachable` with appropriate `ReachabilityStatus` on unexpected errors instead of resetting to `ServerConnectionInitial()`.
+- **Supported `.p12` extension**:
+  - Updated `ClientCertificateFormField` to accept both `.pfx` and `.p12` extensions case-insensitively.
+  - Updated localization strings accordingly.
+
+### Verification
+- **Unit tests**:
+  - `test/src/mtls_client_certificate_test.dart` passed (8/8 tests).
+  - `test/src/reachability_probe_test.dart` passed (3/3 tests).
+  - `test/src/login_timeout_test.dart` passed (7/7 tests).
+- **Emulator verification**:
+  - Verified on Android Emulator (`emulator-5554`, `Medium_Phone_API_37.0`) via integration test with `returnsNormally` on both password-protected and unencrypted PKCS#12 bundles.
+- **Static analysis**:
+  - `fvm flutter analyze lib/` reports 0 errors.
