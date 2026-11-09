@@ -1,0 +1,44 @@
+# Description
+Fixes #427
+
+### Root Cause
+1. **Unpermitted/Hidden Fields Sent as Null (403 Forbidden / Data Loss)**:
+   In `DocumentEditPage`, fields (`fkCorrespondent`, `fkDocumentType`, `fkStoragePath`, `fkTags`, `fkCustomFields`) are conditionally rendered based on permissions (`uiSettings.canView...`). When a user lacks permission to view or manage a field (e.g. `storagePath`), that form field is not mounted in the widget tree, so `_formKey.currentState!.fields[fkStoragePath]` is null.
+   Previously, `_onSubmit` unconditionally wrapped every field in `PatchedValue(...)`:
+   `storagePath: PatchedValue(storagePath)`.
+   Because `storagePath` was null, this sent `"storage_path": null` to Paperless-ngx. If the user lacked permission to modify storage paths, the server rejected the request with **403 Forbidden**. If accepted, it inadvertently wiped out the document's storage path, correspondent, document type, or tags.
+2. **False Unsaved Changes Detection**:
+   In `hasChangesPredicate`, accessing hidden fields returned `null`, comparing `doc.storagePath != null` (e.g. `30 != null`), which evaluated to `true`. This caused the app to think the document had unsaved changes immediately upon opening, triggering a spurious "Discard unsaved changes?" dialog upon pressing Back.
+3. **Silent Form Validation Failures**:
+   If `_formKey.currentState?.saveAndValidate()` returned `false` (e.g. invalid date or required title), the save action silently did nothing. If the user was on the Content tab or scrolled off-screen, clicking the FAB gave zero visual feedback.
+4. **No Double-Submission / In-Flight Protection**:
+   `_onSubmit` had no submission lock or loading indicator. Repeated taps fired multiple concurrent PATCH mutations, explaining the logs showing repeated `updateDocument` calls.
+5. **Initial Value Type Mismatch**:
+   `fkCreatedDate` was initialized in `FormBuilder` with `DateTime` instead of `FormDateTime`, while the localized date picker expects `FormDateTime`. Furthermore, comparing `doc.created != createdAt` caused false positives because `doc.created` contains time information from the server whereas the date picker only manages day, month, and year.
+
+### Solution
+1. **Extracted `DocumentEditPatchBuilder` (`document_edit_patch_builder.dart`)**:
+   - `buildPatchRequest`: Only wraps fields in `PatchedValue(...)` if they were actually present in the form (`presentFieldNames.contains(key)`) AND their values actually changed.
+   - Unrendered/unpermitted fields and unchanged fields remain `null` on `PatchedDocumentRequest`, ensuring they are omitted from the JSON PATCH payload sent to Paperless-ngx.
+   - If the user explicitly clears a present field (e.g. correspondent set to null), it sends `PatchedValue(null)` to properly clear it on the server.
+   - Creation date changes are checked with `isSameDay(DateTime? a, DateTime? b)` so server time components do not trigger spurious date changes.
+   - Content changes are only included if `isContentTouched` (`isDirty`) is true.
+2. **`DocumentEditPage` Improvements**:
+   - `hasChangesPredicate` delegates to `_hasChanges(doc)`, eliminating bogus "unsaved changes" prompts for documents with hidden fields or server timestamps.
+   - Added `_isSubmitting` state guard: disables FAB and displays `IconLoadingWidget` while saving to prevent double submission.
+   - Handles `!saveAndValidate()` by automatically navigating to the tab containing the error (`Content` or `Overview`) and showing an error snackbar with the validation message.
+   - Properly handles `result.isError` in cached query mutation and displays localized error messages.
+   - Properly initializes `fkCreatedDate` with `FormDateTime.fromDateTime`.
+   - Guards `_buildAddCustomFieldToDocumentButton` with `context.uiSettings$.canViewCustomFields`.
+
+### Verification
+- Added 10 unit tests in `test/src/features/document_edit/document_edit_patch_builder_test.dart` covering:
+  - Omission of unpermitted/hidden fields from JSON payload.
+  - Explicit null serialization when clearing values.
+  - Same-day timestamp ignore.
+  - Date changes across days.
+  - Tag reordering vs tag modification.
+  - Content touched vs untouched.
+  - Custom field additions/edits.
+- Ran `fvm flutter test test/src/features/document_edit/document_edit_patch_builder_test.dart` -> 10/10 passed.
+- Ran `fvm flutter analyze lib/features/document_edit` -> No issues found!
