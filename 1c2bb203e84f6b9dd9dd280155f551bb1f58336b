@@ -1,0 +1,16 @@
+# PR Draft: fix(notifications): ensure processing notifications dismiss on completion or task removal (#476)
+
+Closes #476
+
+### Summary
+Fixes an issue where the 'Processing document...' ongoing notification stayed stranded in the Android notification tray indefinitely after uploading documents.
+
+### Root Cause & Fix
+1. In PaperlessTasksApiImpl.listenForTaskChanges, querying with TaskFilterOptions(taskName: TaskNameEnum.consumeFile) and using firstWhere caused runtime exceptions on modern Paperless instances (where task names/types changed), crashing the stream and tearing down the pending task listener prematurely.
+2. EventListenerShell did not detect when tasks were completed or removed from PendingTasksNotifier, leaving the ongoing notification active in the Android system shade.
+3. Added cancelTaskNotification in LocalNotificationService and hooked it into EventListenerShell to cancel progress notifications whenever tasks finish or are removed.
+4. Added autoCancel: true to task notification details so tapping them dismisses them.
+
+### Verification
+- Unit tests added in task_notification_lifecycle_test.dart.
+- Verified on physical Android 17 device (Pixel 11 Pro).
