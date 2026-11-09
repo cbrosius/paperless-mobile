@@ -1,0 +1,14 @@
+# PR Draft: fix(settings): safely resolve language options and prevent crash on regional locales (#403)
+
+Closes #403
+
+### Summary
+Fixes an issue where opening the Settings page resulted in a blank/grey box due to a crash in LanguageSelectionSetting.
+
+### Root Cause & Fix
+When a device has a regional locale set (e.g. nl_NL, en_US, de_DE), _languageOptions[settings.preferredLocaleSubtag] returned null because the map only contains base language keys (e.g. 'nl', 'de'). Using the ! bang operator caused an unhandled Null check operator used on a null value error that crashed the settings page layout.
+
+- Replaced unsafe dictionary access with safe resolution that matches base language prefixes (e.g. nl_NL -> nl) and falls back gracefully to 'en' if unrecognized.
+- Safely resolves initialValue for RadioSettingsDialog.
+- Added comprehensive unit tests in language_selection_setting_test.dart.
+- Verified on Android Emulator (Medium_Phone_API_37.0).
