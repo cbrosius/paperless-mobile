@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:paperless_mobile/core/service/connectivity_status_service.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
@@ -54,7 +56,16 @@ class ServerConnectionCubit extends Cubit<ServerConnectionState> {
         error: error,
         stackTrace: stackTrace,
       );
-      emit(ServerConnectionInitial());
+      final fallbackStatus =
+          (error is ArgumentError ||
+                  error is TlsException ||
+                  error is FormatException) &&
+              clientCertificate != null
+          ? ReachabilityStatus.invalidClientCertificateConfiguration
+          : ReachabilityStatus.notReachable;
+      emit(
+        ServerConnectionUnreachable(address: address, status: fallbackStatus),
+      );
     }
   }
 }

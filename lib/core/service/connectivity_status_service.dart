@@ -108,7 +108,7 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
         options: Options(
           receiveTimeout: 5.seconds,
           sendTimeout: 5.seconds,
-          followRedirects: false, 
+          followRedirects: false,
           validateStatus: (status) => status == HttpStatus.found,
         ),
       );
@@ -141,8 +141,14 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
       }
     } on TlsException catch (error) {
       final code = error.osError?.errorCode;
-      if (code == OsErrorCodes.invalidClientCertConfig.code) {
-        // Missing client cert passphrase
+      if (code == OsErrorCodes.invalidClientCertConfig.code ||
+          clientCertificate != null) {
+        // Missing or incorrect client cert passphrase or certificate configuration error
+        logger.fw(
+          'Client certificate configuration error (TLS): ${error.message}',
+          className: runtimeType.toString(),
+          methodName: 'isPaperlessServerReachable',
+        );
         return ReachabilityStatus.invalidClientCertificateConfiguration;
       }
       logger.fw(
@@ -150,6 +156,24 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
         className: runtimeType.toString(),
         methodName: 'isPaperlessServerReachable',
       );
+    } on ArgumentError catch (error) {
+      if (clientCertificate != null) {
+        logger.fw(
+          'Client certificate argument error: ${error.message}',
+          className: runtimeType.toString(),
+          methodName: 'isPaperlessServerReachable',
+        );
+        return ReachabilityStatus.invalidClientCertificateConfiguration;
+      }
+    } on FormatException catch (error) {
+      if (clientCertificate != null) {
+        logger.fw(
+          'Client certificate format error: ${error.message}',
+          className: runtimeType.toString(),
+          methodName: 'isPaperlessServerReachable',
+        );
+        return ReachabilityStatus.invalidClientCertificateConfiguration;
+      }
     }
     return ReachabilityStatus.notReachable;
   }
@@ -160,24 +184,54 @@ class ConnectivityStatusServiceImpl implements ConnectivityStatusService {
     ClientCertificate? clientCertificate,
     List<HeaderEntry>? additionalHeaders,
   ]) async {
-    SessionManager manager = SessionManagerImpl()
-      ..updateSettings(
-        baseUrl: serverAddress,
-        clientCertificate: clientCertificate,
-        additionalHeaders: additionalHeaders,
-      );
+    try {
+      SessionManager manager = SessionManagerImpl()
+        ..updateSettings(
+          baseUrl: serverAddress,
+          clientCertificate: clientCertificate,
+          additionalHeaders: additionalHeaders,
+        );
 
-    int apiVersion = await manager.getApiVersion();
+      int apiVersion = await manager.getApiVersion();
 
-    if (apiVersion > latestSupportedApiVersion) {
+      if (apiVersion > latestSupportedApiVersion) {
+        logger.fw(
+          'Server API version $apiVersion is newer than the latest supported version $latestSupportedApiVersion. Defaulting to latest supported version.',
+          className: runtimeType.toString(),
+          methodName: 'getPaperlessServerApiVersion',
+        );
+        apiVersion = latestSupportedApiVersion;
+      }
+      return apiVersion;
+    } on TlsException catch (error) {
       logger.fw(
-        'Server API version $apiVersion is newer than the latest supported version $latestSupportedApiVersion. Defaulting to latest supported version.',
+        'TLS exception while fetching API version: ${error.message}',
         className: runtimeType.toString(),
         methodName: 'getPaperlessServerApiVersion',
       );
-      apiVersion = latestSupportedApiVersion;
+      return minSupportedApiVersion;
+    } on ArgumentError catch (error) {
+      logger.fw(
+        'Argument error while configuring client certificate for API version: ${error.message}',
+        className: runtimeType.toString(),
+        methodName: 'getPaperlessServerApiVersion',
+      );
+      return minSupportedApiVersion;
+    } on FormatException catch (error) {
+      logger.fw(
+        'Format exception while configuring client certificate for API version: ${error.message}',
+        className: runtimeType.toString(),
+        methodName: 'getPaperlessServerApiVersion',
+      );
+      return minSupportedApiVersion;
+    } catch (error) {
+      logger.fw(
+        'Unexpected error while fetching API version: $error',
+        className: runtimeType.toString(),
+        methodName: 'getPaperlessServerApiVersion',
+      );
+      return minSupportedApiVersion;
     }
-    return apiVersion;
   }
 }
 

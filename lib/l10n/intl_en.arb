@@ -675,7 +675,7 @@
   "@invalidApiKey": {
     "description": "Message shown when the provided API key is invalid."
   },
-  "invalidCertificateFormat": "Invalid certificate format, only .pfx is allowed",
+  "invalidCertificateFormat": "Invalid certificate format, only .pfx and .p12 are allowed",
   "@invalidCertificateFormat": {},
   "invalidCertificateOrMissingPassphrase": "Invalid certificate or missing passphrase, please try again",
   "@invalidCertificateOrMissingPassphrase": {},

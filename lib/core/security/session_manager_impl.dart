@@ -68,19 +68,8 @@ class SessionManagerImpl extends ValueNotifier<Dio> implements SessionManager {
     bool broadcast = true,
   }) {
     if (clientCertificate != null) {
-      final context = SecurityContext()
-        ..usePrivateKeyBytes(
-          clientCertificate.bytes,
-          password: clientCertificate.passphrase,
-        )
-        ..useCertificateChainBytes(
-          clientCertificate.bytes,
-          password: clientCertificate.passphrase,
-        )
-        ..setTrustedCertificatesBytes(
-          clientCertificate.bytes,
-          password: clientCertificate.passphrase,
-        );
+      final context = SecurityContext();
+      _applyClientCertificate(context, clientCertificate);
       final adapter = IOHttpClientAdapter()
         ..createHttpClient = () => HttpClient(context: context)
           ..badCertificateCallback =
@@ -144,6 +133,42 @@ class SessionManagerImpl extends ValueNotifier<Dio> implements SessionManager {
         methodName: 'getApiVersion',
       );
       return minSupportedApiVersion;
+    }
+  }
+
+  static void _applyClientCertificate(
+    SecurityContext context,
+    ClientCertificate clientCertificate,
+  ) {
+    final passphrase = clientCertificate.passphrase;
+    try {
+      context
+        ..useCertificateChainBytes(
+          clientCertificate.bytes,
+          password: passphrase,
+        )
+        ..usePrivateKeyBytes(clientCertificate.bytes, password: passphrase);
+    } catch (_) {
+      // If passphrase is null or empty, BoringSSL may require the alternative representation
+      // (empty string vs null) depending on how the PKCS#12 archive was encoded.
+      if (passphrase == null || passphrase.isEmpty) {
+        final fallbackPassphrase = passphrase == null ? '' : null;
+        try {
+          context
+            ..useCertificateChainBytes(
+              clientCertificate.bytes,
+              password: fallbackPassphrase,
+            )
+            ..usePrivateKeyBytes(
+              clientCertificate.bytes,
+              password: fallbackPassphrase,
+            );
+          return;
+        } catch (_) {
+          // Fall through to rethrow the original error below.
+        }
+      }
+      rethrow;
     }
   }
 

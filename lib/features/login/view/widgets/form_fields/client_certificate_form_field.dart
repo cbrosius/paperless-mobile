@@ -131,7 +131,8 @@ class _ClientCertificateFormFieldState extends State<ClientCertificateFormField>
       return;
     }
     final path = result.files.single.path!;
-    if (p.extension(path) != '.pfx') {
+    final extension = p.extension(path).toLowerCase();
+    if (extension != '.pfx' && extension != '.p12') {
       if (mounted) {
         showSnackBar(context, S.of(context)!.invalidCertificateFormat);
       }

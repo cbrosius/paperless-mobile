@@ -663,7 +663,7 @@
   "@invalidApiKey": {
     "description": "Message shown when the provided API key is invalid."
   },
-  "invalidCertificateFormat": "Ungültiges Zertifikatsformat, nur .pfx ist erlaubt.",
+  "invalidCertificateFormat": "Ungültiges Zertifikatsformat, nur .pfx und .p12 sind erlaubt.",
   "@invalidCertificateFormat": {},
   "invalidCertificateOrMissingPassphrase": "Ungültiges Zertifikat oder fehlende Passphrase, bitte versuche es erneut.",
   "@invalidCertificateOrMissingPassphrase": {},

@@ -52,7 +52,7 @@ void main() {
 
   group('Lightweight reachability & API version probes (#704)', () {
     test(
-      'isPaperlessServerReachable follows 302 redirect from HEAD /api/ to /api/schema/view/ without requesting /api/schema/',
+      'isPaperlessServerReachable checks 302 on HEAD /api/ without requesting /api/schema/',
       () async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         addTearDown(() => server.close(force: true));
@@ -82,7 +82,7 @@ void main() {
         );
 
         expect(status, ReachabilityStatus.reachable);
-        expect(requestedPaths, ['HEAD /api/', 'HEAD /api/schema/view/']);
+        expect(requestedPaths, ['HEAD /api/']);
       },
     );
 
@@ -136,4 +136,3 @@ void main() {
     );
   });
 }
-
