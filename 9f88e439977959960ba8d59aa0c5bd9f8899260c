@@ -1,0 +1,16 @@
+# PR Draft: fix(login): make authenticate and otp screens scrollable and responsive to keyboard (#384)
+
+Closes #384
+
+### Summary
+Fixes an issue on the login authentication screen where the keyboard obstructed the password field and the content could not be scrolled on regular/smaller screens.
+
+### Root Cause & Fix
+1. AuthenticateUserPage had resizeToAvoidBottomInset: false, causing the on-screen keyboard to render on top of password and submit fields.
+2. The body layout was a rigid Column containing an Expanded, preventing users from scrolling to access notes, edit/back, and sign-in buttons on smaller screens.
+3. Enabled resizeToAvoidBottomInset: true and wrapped the form in a SingleChildScrollView without rigid Expanded constraints.
+4. Also wrapped OtpInputPage in a SingleChildScrollView to prevent keyboard/screen overflows during 2FA code entry.
+
+### Verification
+- Widget test added in authenticate_user_page_test.dart for small-viewport scrollability.
+- Verified on Android Emulator (Medium_Phone_API_37.0).
