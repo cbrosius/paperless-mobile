@@ -40,31 +40,25 @@ void main() {
   });
 
   group('LocalNotificationService - Task Notification Lifecycle (#476)', () {
-    test(
-      'notifyTaskChanged configures autoCancel on task notification',
-      () async {
-        final task = TasksView(
-          id: 476,
-          taskId: 'task-uuid-476',
-          status: StatusEnum.pending,
-          taskFileName: 'test_doc.pdf',
-        );
+    test('notifyTaskChanged configures autoCancel on task notification', () async {
+      final task = TasksView(
+        id: 476,
+        taskId: 'task-uuid-476',
+        status: StatusEnum.pending,
+        taskFileName: 'test_doc.pdf',
+      );
 
-        await service.notifyTaskChanged(task, userId: 'user-1');
+      await service.notifyTaskChanged(task, userId: 'user-1');
 
-        expect(mockPlugin.shownDetails.length, 1);
-        final details = mockPlugin.shownDetails.first?.android;
-        expect(details?.autoCancel, isTrue);
-      },
-    );
+      expect(mockPlugin.shownDetails.length, 1);
+      final details = mockPlugin.shownDetails.first?.android;
+      expect(details?.autoCancel, isTrue);
+    });
 
-    test(
-      'cancelTaskNotification cancels the matching notification id',
-      () async {
-        await service.cancelTaskNotification(476);
+    test('cancelTaskNotification cancels the matching notification id', () async {
+      await service.cancelTaskNotification(476);
 
-        expect(mockPlugin.cancelledIds, contains(1476));
-      },
-    );
+      expect(mockPlugin.cancelledIds, contains(1476));
+    });
   });
 }
