@@ -14,6 +14,8 @@ import 'package:paperless_mobile/core/repository/document_repository.dart';
 import 'package:paperless_mobile/core/widgets/dialog_utils/pop_with_unsaved_changes.dart';
 import 'package:paperless_mobile/core/widgets/form_builder_fields/custom_field_form_field/form_builder_custom_fields_field.dart';
 import 'package:paperless_mobile/core/widgets/form_builder_fields/form_builder_localized_date_picker.dart';
+import 'package:paperless_mobile/core/widgets/icon_loading_widget.dart';
+import 'package:paperless_mobile/features/document_edit/utils/document_edit_patch_builder.dart';
 import 'package:paperless_mobile/features/document_edit/view/custom_field_selection_page.dart';
 import 'package:paperless_mobile/features/documents/view/pages/document_view.dart';
 import 'package:paperless_mobile/features/labels/tags/view/widgets/tags_form_field.dart';
@@ -34,19 +36,20 @@ class DocumentEditPage extends StatefulWidget {
 
 class _DocumentEditPageState extends State<DocumentEditPage>
     with TickerProviderStateMixin {
-  static const fkTitle = "title";
-  static const fkCorrespondent = "correspondent";
-  static const fkTags = "tags";
-  static const fkDocumentType = "documentType";
-  static const fkCreatedDate = "createdAtDate";
-  static const fkStoragePath = 'storagePath';
-  static const fkContent = 'content';
-  static const fkCustomFields = 'customFields';
+  static const fkTitle = DocumentEditPatchBuilder.fkTitle;
+  static const fkCorrespondent = DocumentEditPatchBuilder.fkCorrespondent;
+  static const fkTags = DocumentEditPatchBuilder.fkTags;
+  static const fkDocumentType = DocumentEditPatchBuilder.fkDocumentType;
+  static const fkCreatedDate = DocumentEditPatchBuilder.fkCreatedDate;
+  static const fkStoragePath = DocumentEditPatchBuilder.fkStoragePath;
+  static const fkContent = DocumentEditPatchBuilder.fkContent;
+  static const fkCustomFields = DocumentEditPatchBuilder.fkCustomFields;
 
   final _formKey = GlobalKey<FormBuilderState>();
 
   bool _isShowingPdf = false;
   int _selectedTabIndex = 0;
+  bool _isSubmitting = false;
 
   late final TabController _tabController;
 
@@ -87,36 +90,7 @@ class _DocumentEditPageState extends State<DocumentEditPage>
           );
         }
         return PopWithUnsavedChanges(
-          hasChangesPredicate: () {
-            final fkState = _formKey.currentState;
-            if (fkState == null) {
-              return false;
-            }
-            final doc = state.data!;
-            final (
-              :title,
-              :correspondent,
-              :documentType,
-              :storagePath,
-              :tags,
-              :createdAt,
-              :content,
-              :customFields,
-            ) = _currentValues;
-            final isContentTouched =
-                _formKey.currentState?.fields[fkContent]?.isDirty ?? false;
-            return doc.title != title ||
-                doc.correspondent != correspondent ||
-                doc.documentType != documentType ||
-                doc.storagePath != storagePath ||
-                !const UnorderedIterableEquality().equals(doc.tags, tags) ||
-                doc.created != createdAt ||
-                (doc.content != content && isContentTouched) ||
-                !const ListEquality<CustomFieldInstance>().equals(
-                  doc.customFields ?? [],
-                  customFields,
-                );
-          },
+          hasChangesPredicate: () => _hasChanges(state.data!),
           child: FormBuilder(
             key: _formKey,
             initialValue: {
@@ -125,7 +99,9 @@ class _DocumentEditPageState extends State<DocumentEditPage>
               fkDocumentType: state.data!.documentType,
               fkStoragePath: state.data!.storagePath,
               fkTags: IdsTagsQuery(include: state.data!.tags ?? []),
-              fkCreatedDate: state.data!.created,
+              fkCreatedDate: state.data!.created != null
+                  ? FormDateTime.fromDateTime(state.data!.created!)
+                  : null,
               fkContent: state.data!.content,
               fkCustomFields:
                   state.data!.customFields ?? <CustomFieldInstance>[],
@@ -159,8 +135,12 @@ class _DocumentEditPageState extends State<DocumentEditPage>
                     floatingActionButton: !_isShowingPdf
                         ? FloatingActionButton.extended(
                             heroTag: "fab_document_edit",
-                            onPressed: () => _onSubmit(state.data!),
-                            icon: const Icon(Icons.save),
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _onSubmit(state.data!),
+                            icon: _isSubmitting
+                                ? const IconLoadingWidget()
+                                : const Icon(Icons.save),
                             label: Text(S.of(context)!.saveChanges),
                           )
                         : null,
@@ -331,9 +311,10 @@ class _DocumentEditPageState extends State<DocumentEditPage>
                               name: fkCustomFields,
                               initialValue: document.customFields ?? [],
                             ),
-                          _buildAddCustomFieldToDocumentButton(
-                            context,
-                          ).paddedOnly(top: 16),
+                          if (context.uiSettings$.canViewCustomFields)
+                            _buildAddCustomFieldToDocumentButton(
+                              context,
+                            ).paddedOnly(top: 16),
                           const SizedBox(height: 140),
                         ]
                         .expand((child) => [child, const SizedBox(height: 16)])
@@ -387,90 +368,80 @@ class _DocumentEditPageState extends State<DocumentEditPage>
     );
   }
 
-  ({
-    String? title,
-    int? correspondent,
-    int? documentType,
-    int? storagePath,
-    List<int>? tags,
-    DateTime? createdAt,
-    String? content,
-    List<CustomFieldInstance> customFields,
-  })
-  get _currentValues {
-    final fkState = _formKey.currentState!.fields;
-
-    final correspondent = fkState[fkCorrespondent]?.value as int?;
-    final documentType = fkState[fkDocumentType]?.value as int?;
-    final storagePath = fkState[fkStoragePath]?.value as int?;
-    final tagsParam = fkState[fkTags]?.value as IdsTagsQuery?;
-    final title = fkState[fkTitle]?.value as String?;
-    final created = fkState[fkCreatedDate]?.value as FormDateTime?;
-    final tags = switch (tagsParam) {
-      IdsTagsQuery(include: var include) => include,
-      _ => null,
+  PatchedDocumentRequest? _buildChangedFieldsRequest(Document doc) {
+    final fkState = _formKey.currentState;
+    if (fkState == null) return null;
+    final formValues = <String, dynamic>{
+      for (final entry in fkState.fields.entries) entry.key: entry.value.value,
     };
-    final content = fkState[fkContent]?.value as String?;
-    final customFields =
-        fkState[fkCustomFields]?.value as List<CustomFieldInstance>? ?? [];
+    final isContentTouched =
+        fkState.fields[DocumentEditPatchBuilder.fkContent]?.isDirty ?? false;
 
-    return (
-      title: title,
-      correspondent: correspondent,
-      documentType: documentType,
-      storagePath: storagePath,
-      tags: tags,
-      createdAt: created?.toDateTime(),
-      content: content,
-      customFields: customFields,
+    return DocumentEditPatchBuilder.buildPatchRequest(
+      document: doc,
+      formValues: formValues,
+      presentFieldNames: fkState.fields.keys.toSet(),
+      isContentTouched: isContentTouched,
     );
   }
 
+  bool _hasChanges(Document doc) => _buildChangedFieldsRequest(doc) != null;
+
   Future<void> _onSubmit(Document document) async {
-    if (_formKey.currentState?.saveAndValidate() ?? false) {
-      final (
-        :title,
-        :correspondent,
-        :documentType,
-        :storagePath,
-        :tags,
-        :createdAt,
-        :content,
-        :customFields,
-      ) = _currentValues;
+    if (_isSubmitting) return;
 
-      final customFieldRequests = customFields
-          .map(
-            (i) => CustomFieldInstanceRequest(field: i.field, value: i.value),
-          )
-          .toList();
+    final isValid = _formKey.currentState?.saveAndValidate() ?? false;
+    if (!isValid) {
+      final fields = _formKey.currentState?.fields ?? {};
+      final invalidFieldEntry = fields.entries.firstWhereOrNull(
+        (e) => e.value.hasError,
+      );
+      if (invalidFieldEntry != null) {
+        if (invalidFieldEntry.key == fkContent) {
+          _tabController.animateTo(1);
+        } else {
+          _tabController.animateTo(0);
+        }
+        final errorText = invalidFieldEntry.value.errorText;
+        if (errorText != null && mounted) {
+          showSnackBar(context, errorText, type: SnackbarType.error);
+        }
+      }
+      return;
+    }
 
-      try {
-        var request = PatchedDocumentRequest(
-          correspondent: PatchedValue(correspondent),
-          documentType: PatchedValue(documentType),
-          storagePath: PatchedValue(storagePath),
-          tags: PatchedValue(tags),
-          content: PatchedValue(content),
-          title: PatchedValue(title),
-          created: PatchedValue(createdAt),
-          customFields: PatchedValue(customFieldRequests),
-        );
-        final result = await context
-            .read<DocumentRepository>()
-            .patchDocumentMutation(document.id)
-            .mutate(request);
-        if (result is MutationError) {
-          throw (result as MutationError).error;
-        }
-        if (mounted) {
-          showSnackBar(context, S.of(context)!.documentSuccessfullyUpdated);
-          context.pop();
-        }
-      } on PaperlessApiException catch (error, stackTrace) {
-        if (mounted) showErrorMessage(context, error, stackTrace);
-      } catch (error, stackTrace) {
-        if (mounted) showGenericError(context, error, stackTrace);
+    final request = _buildChangedFieldsRequest(document);
+    if (request == null) {
+      if (mounted) {
+        context.pop();
+      }
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      final result = await context
+          .read<DocumentRepository>()
+          .patchDocumentMutation(document.id)
+          .mutate(request);
+      if (result is MutationError) {
+        throw (result as MutationError).error;
+      }
+      if (result.isError) {
+        throw result.error ??
+            const PaperlessApiException(ErrorCode.documentUpdateFailed);
+      }
+      if (mounted) {
+        showSnackBar(context, S.of(context)!.documentSuccessfullyUpdated);
+        context.pop();
+      }
+    } on PaperlessApiException catch (error, stackTrace) {
+      if (mounted) showErrorMessage(context, error, stackTrace);
+    } catch (error, stackTrace) {
+      if (mounted) showGenericError(context, error, stackTrace);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
       }
     }
   }
