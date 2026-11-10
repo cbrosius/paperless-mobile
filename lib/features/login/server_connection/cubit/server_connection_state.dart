@@ -33,3 +33,17 @@ class ServerConnectionUnreachable extends ServerConnectionState {
     required this.status,
   });
 }
+
+class ServerConnectionUntrustedCertificate extends ServerConnectionState {
+  final String address;
+  final ServerCertificate certificate;
+  final ClientCertificate? clientCertificate;
+  final List<HeaderEntry>? additionalHeaders;
+
+  const ServerConnectionUntrustedCertificate({
+    required this.address,
+    required this.certificate,
+    this.clientCertificate,
+    this.additionalHeaders,
+  });
+}

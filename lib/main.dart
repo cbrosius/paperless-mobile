@@ -26,6 +26,7 @@ import 'package:paperless_mobile/core/bloc/connectivity_cubit.dart';
 import 'package:paperless_mobile/core/bloc/my_bloc_observer.dart';
 import 'package:paperless_mobile/core/exception/server_message_exception.dart';
 import 'package:paperless_mobile/core/interceptor/language_header.interceptor.dart';
+import 'package:paperless_mobile/core/security/certificate_trust_store.dart';
 import 'package:paperless_mobile/core/security/session_manager.dart';
 import 'package:paperless_mobile/core/security/session_manager_impl.dart';
 import 'package:paperless_mobile/core/service/connectivity_status_service.dart';
@@ -104,8 +105,11 @@ void main() async {
           refetchOnResume: true,
         ),
       );
+      final certificateTrustStore = await CertificateTrustStoreImpl.init();
+      SessionManagerImpl.defaultTrustStore = certificateTrustStore;
       final connectivityStatusService = ConnectivityStatusServiceImpl(
         Connectivity(),
+        certificateTrustStore,
       );
       final localAuthService = LocalAuthenticationService(
         LocalAuthentication(),
@@ -172,6 +176,7 @@ void main() async {
           localAuthService: localAuthService,
           localStore: localStore,
           encryptedLocalStore: encryptedLocalStore,
+          certificateTrustStore: certificateTrustStore,
         ),
       );
     },
@@ -204,6 +209,7 @@ class AppEntrypoint extends StatelessWidget {
   final LocalNotificationService localNotificationService;
   final LocalAuthenticationService localAuthService;
   final SessionManager sessionManager;
+  final CertificateTrustStore? certificateTrustStore;
 
   const AppEntrypoint({
     super.key,
@@ -214,6 +220,7 @@ class AppEntrypoint extends StatelessWidget {
     required this.localAuthService,
     required this.sessionManager,
     required this.encryptedLocalStore,
+    this.certificateTrustStore,
   });
 
   @override
@@ -232,6 +239,8 @@ class AppEntrypoint extends StatelessWidget {
         ),
         ChangeNotifierProvider.value(value: sessionManager),
         Provider.value(value: connectivityStatusService),
+        if (certificateTrustStore != null)
+          Provider<CertificateTrustStore>.value(value: certificateTrustStore!),
         Provider.value(value: localNotificationService),
         Provider.value(value: localAuthService),
       ],

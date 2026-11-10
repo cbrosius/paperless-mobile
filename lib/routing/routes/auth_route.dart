@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:paperless_mobile/core/security/certificate_trust_store.dart';
+import 'package:paperless_mobile/core/security/session_manager_impl.dart';
 import 'package:paperless_mobile/core/store/local_store.dart';
 import 'package:paperless_mobile/features/login/authenticate_user/cubit/authenticate_user_cubit.dart';
 import 'package:paperless_mobile/features/login/authenticate_user/model/authentication_credentials.dart';
@@ -59,7 +61,15 @@ class AuthRoute extends GoRouteData with $AuthRoute {
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     return MaterialPage(
       child: BlocProvider(
-        create: (context) => ServerConnectionCubit(context.read()),
+        create: (context) {
+          CertificateTrustStore? trustStore;
+          try {
+            trustStore = context.read<CertificateTrustStore>();
+          } catch (_) {
+            trustStore = SessionManagerImpl.defaultTrustStore;
+          }
+          return ServerConnectionCubit(context.read(), trustStore);
+        },
         child: ServerConnectionPage(initialHost: initialHost),
       ),
     );

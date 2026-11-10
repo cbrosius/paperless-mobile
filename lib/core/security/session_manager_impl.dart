@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:paperless_mobile/core/interceptor/dio_offline_interceptor.dart';
 import 'package:paperless_mobile/core/interceptor/dio_unauthorized_interceptor.dart';
 import 'package:paperless_mobile/core/interceptor/persistent_logging_interceptor.dart';
 import 'package:paperless_mobile/core/interceptor/retry_on_connection_change_interceptor.dart';
+import 'package:paperless_mobile/core/security/certificate_trust_store.dart';
 import 'package:paperless_mobile/core/security/session_manager.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
 import 'package:paperless_mobile/features/login/model/client_certificate.dart';
@@ -21,13 +23,52 @@ import 'package:paperless_mobile/features/login/server_connection/model/header_e
 /// requiring authenticated access to the Paperless REST API.
 class SessionManagerImpl extends ValueNotifier<Dio> implements SessionManager {
   static int? _apiVersion;
+  static CertificateTrustStore? defaultTrustStore;
+
+  final CertificateTrustStore? certificateTrustStore;
+  final bool Function(X509Certificate cert, String host, int port)?
+  onBadCertificate;
+
   @override
   Dio get client => value;
 
-  SessionManagerImpl([List<Interceptor> interceptors = const []])
-    : super(_initDio(interceptors));
+  SessionManagerImpl([
+    List<Interceptor> interceptors = const [],
+    this.certificateTrustStore,
+    this.onBadCertificate,
+  ]) : super(
+         _initDio(
+           interceptors,
+           certificateTrustStore ?? defaultTrustStore,
+           onBadCertificate,
+         ),
+       );
 
-  static Dio _initDio(List<Interceptor> interceptors) {
+  static bool Function(X509Certificate cert, String host, int port)
+  _createBadCertificateCallback(
+    CertificateTrustStore? trustStore,
+    bool Function(X509Certificate cert, String host, int port)?
+    onBadCertificate,
+  ) {
+    return (X509Certificate cert, String host, int port) {
+      if (onBadCertificate != null) {
+        return onBadCertificate(cert, host, port);
+      }
+      final effectiveTrustStore = trustStore ?? defaultTrustStore;
+      if (effectiveTrustStore == null) {
+        return false;
+      }
+      final fingerprint = sha256.convert(cert.der).toString().toLowerCase();
+      return effectiveTrustStore.isCertificateTrusted(host, fingerprint);
+    };
+  }
+
+  static Dio _initDio(
+    List<Interceptor> interceptors,
+    CertificateTrustStore? trustStore,
+    bool Function(X509Certificate cert, String host, int port)?
+    onBadCertificate,
+  ) {
     //en- and decoded by utf8 by default
     final Dio dio = Dio(
       BaseOptions(
@@ -44,7 +85,10 @@ class SessionManagerImpl extends ValueNotifier<Dio> implements SessionManager {
     (dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () =>
         HttpClient()
           ..idleTimeout = 15.seconds
-          ..badCertificateCallback = (cert, host, port) => true;
+          ..badCertificateCallback = _createBadCertificateCallback(
+            trustStore,
+            onBadCertificate,
+          );
 
     dio.interceptors.addAll([
       ...interceptors,
@@ -68,23 +112,15 @@ class SessionManagerImpl extends ValueNotifier<Dio> implements SessionManager {
     bool broadcast = true,
   }) {
     if (clientCertificate != null) {
-      final context = SecurityContext()
-        ..usePrivateKeyBytes(
-          clientCertificate.bytes,
-          password: clientCertificate.passphrase,
-        )
-        ..useCertificateChainBytes(
-          clientCertificate.bytes,
-          password: clientCertificate.passphrase,
-        )
-        ..setTrustedCertificatesBytes(
-          clientCertificate.bytes,
-          password: clientCertificate.passphrase,
-        );
+      final context = SecurityContext();
+      _applyClientCertificate(context, clientCertificate);
+
       final adapter = IOHttpClientAdapter()
         ..createHttpClient = () => HttpClient(context: context)
-          ..badCertificateCallback =
-              (X509Certificate cert, String host, int port) => true;
+          ..badCertificateCallback = _createBadCertificateCallback(
+            certificateTrustStore,
+            onBadCertificate,
+          );
 
       client.httpClientAdapter = adapter;
     }
@@ -147,9 +183,50 @@ class SessionManagerImpl extends ValueNotifier<Dio> implements SessionManager {
     }
   }
 
+  static void _applyClientCertificate(
+    SecurityContext context,
+    ClientCertificate clientCertificate,
+  ) {
+    final passphrase = clientCertificate.passphrase;
+    try {
+      context
+        ..useCertificateChainBytes(
+          clientCertificate.bytes,
+          password: passphrase,
+        )
+        ..usePrivateKeyBytes(clientCertificate.bytes, password: passphrase);
+    } catch (_) {
+      if (passphrase == null || passphrase.isEmpty) {
+        final fallbackPassphrase = passphrase == null ? '' : null;
+        try {
+          context
+            ..useCertificateChainBytes(
+              clientCertificate.bytes,
+              password: fallbackPassphrase,
+            )
+            ..usePrivateKeyBytes(
+              clientCertificate.bytes,
+              password: fallbackPassphrase,
+            );
+          return;
+        } catch (_) {
+          // Fall through to rethrow the original error below.
+        }
+      }
+      rethrow;
+    }
+  }
+
   @override
   void resetSettings({bool broadcast = true}) {
-    client.httpClientAdapter = IOHttpClientAdapter();
+    final adapter = IOHttpClientAdapter()
+      ..createHttpClient = () => HttpClient()
+        ..idleTimeout = 15.seconds
+        ..badCertificateCallback = _createBadCertificateCallback(
+          certificateTrustStore,
+          onBadCertificate,
+        );
+    client.httpClientAdapter = adapter;
     client.options.baseUrl = '';
     client.options.headers.clear();
     SessionManagerImpl._apiVersion = null;

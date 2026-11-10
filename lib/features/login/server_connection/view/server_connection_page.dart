@@ -7,6 +7,7 @@ import 'package:paperless_mobile/features/login/model/client_certificate.dart';
 import 'package:paperless_mobile/features/login/model/reachability_status.dart';
 import 'package:paperless_mobile/features/login/server_connection/cubit/server_connection_cubit.dart';
 import 'package:paperless_mobile/features/login/server_connection/model/header_entry.dart';
+import 'package:paperless_mobile/features/login/server_connection/view/dialogs/untrusted_certificate_dialog.dart';
 import 'package:paperless_mobile/features/login/view/widgets/form_fields/additional_headers_form_field.dart';
 import 'package:paperless_mobile/features/login/view/widgets/form_fields/client_certificate_form_field.dart';
 import 'package:paperless_mobile/features/login/view/widgets/form_fields/server_address_form_field.dart';
@@ -90,6 +91,31 @@ class _ServerConnectionPageState extends State<ServerConnectionPage> {
                             additionalHeaders: state.additionalHeaders,
                           ),
                         ).push(context);
+                      } else if (state
+                          is ServerConnectionUntrustedCertificate) {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (dialogContext) =>
+                              UntrustedCertificateDialog(
+                                certificate: state.certificate,
+                                onTrust: () {
+                                  context
+                                      .read<ServerConnectionCubit>()
+                                      .trustCertificateAndRetry(
+                                        certificate: state.certificate,
+                                        address: state.address,
+                                        clientCertificate:
+                                            state.clientCertificate,
+                                        additionalHeaders:
+                                            state.additionalHeaders,
+                                      );
+                                },
+                                onCancel: () {
+                                  context.read<ServerConnectionCubit>().reset();
+                                },
+                              ),
+                        );
                       }
                     },
                     builder: (context, state) {
@@ -163,6 +189,13 @@ class _ServerConnectionPageState extends State<ServerConnectionPage> {
 
     return BlocBuilder<ServerConnectionCubit, ServerConnectionState>(
       builder: (context, state) {
+        if (state is ServerConnectionUntrustedCertificate) {
+          return buildIconText(
+            Icons.warning_amber_rounded,
+            S.of(context)!.untrustedCertificate,
+            errorColor,
+          );
+        }
         if (state is! ServerConnectionUnreachable) {
           return const SizedBox.shrink();
         }
@@ -196,6 +229,12 @@ class _ServerConnectionPageState extends State<ServerConnectionPage> {
             return buildIconText(
               Icons.close,
               S.of(context)!.connectionTimedOut,
+              errorColor,
+            );
+          case ReachabilityStatus.untrustedServerCertificate:
+            return buildIconText(
+              Icons.warning_amber_rounded,
+              S.of(context)!.untrustedCertificate,
               errorColor,
             );
           default:

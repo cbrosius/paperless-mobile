@@ -1294,5 +1294,39 @@
   "scannerParameterMinimumAreaFactor": "Minimum Area Factor",
   "@scannerParameterMinimumAreaFactor": {},
   "scannerParameterMinimumAreaFactorDescription": "Specifies the minimum screen surface area percentage required for a document outline to be registered. Higher percentages ignore small rectangular clutter in the background, while lower percentages allow scanning small receipts or documents from further away.",
-  "@scannerParameterMinimumAreaFactorDescription": {}
+  "@scannerParameterMinimumAreaFactorDescription": {},
+  "untrustedCertificate": "Untrusted Certificate",
+  "@untrustedCertificate": {},
+  "untrustedCertificateWarning": "The server at {host} presented an untrusted or self-signed certificate. Verify the fingerprint before continuing.",
+  "@untrustedCertificateWarning": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "sha256Fingerprint": "SHA-256 Fingerprint",
+  "@sha256Fingerprint": {},
+  "certificateIssuer": "Issuer",
+  "@certificateIssuer": {},
+  "certificateValidity": "Valid until",
+  "@certificateValidity": {},
+  "trustCertificate": "Trust Certificate",
+  "@trustCertificate": {},
+  "trustedCertificates": "Trusted Certificates",
+  "@trustedCertificates": {},
+  "manageTrustedCertificates": "Manage custom trusted SSL/TLS certificates",
+  "@manageTrustedCertificates": {},
+  "noTrustedCertificates": "No custom trusted certificates",
+  "@noTrustedCertificates": {},
+  "trustedAt": "Trusted on",
+  "@trustedAt": {},
+  "copiedToClipboard": "{label} copied to clipboard",
+  "@copiedToClipboard": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:paperless_mobile/core/security/certificate_trust_store.dart';
+import 'package:paperless_mobile/core/security/server_certificate.dart';
+import 'package:paperless_mobile/core/security/session_manager_impl.dart';
 import 'package:paperless_mobile/core/service/connectivity_status_service.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
 import 'package:paperless_mobile/features/login/model/client_certificate.dart';
@@ -9,8 +14,12 @@ part 'server_connection_state.dart';
 
 class ServerConnectionCubit extends Cubit<ServerConnectionState> {
   final ConnectivityStatusService _connectivityStatusService;
-  ServerConnectionCubit(this._connectivityStatusService)
-    : super(const ServerConnectionInitial());
+  final CertificateTrustStore? _certificateTrustStore;
+
+  ServerConnectionCubit(
+    this._connectivityStatusService, [
+    this._certificateTrustStore,
+  ]) : super(const ServerConnectionInitial());
 
   void reset() {
     emit(const ServerConnectionInitial());
@@ -37,6 +46,16 @@ class ServerConnectionCubit extends Cubit<ServerConnectionState> {
             additionalHeaders: additionalHeaders,
           ),
         );
+      } else if (status == ReachabilityStatus.untrustedServerCertificate &&
+          _connectivityStatusService.lastUntrustedCertificate != null) {
+        emit(
+          ServerConnectionUntrustedCertificate(
+            address: address,
+            certificate: _connectivityStatusService.lastUntrustedCertificate!,
+            clientCertificate: clientCertificate,
+            additionalHeaders: additionalHeaders,
+          ),
+        );
       } else {
         logger.fw(
           'Server is not reachable',
@@ -54,7 +73,34 @@ class ServerConnectionCubit extends Cubit<ServerConnectionState> {
         error: error,
         stackTrace: stackTrace,
       );
-      emit(ServerConnectionInitial());
+      final fallbackStatus =
+          (error is ArgumentError ||
+                  error is TlsException ||
+                  error is FormatException) &&
+              clientCertificate != null
+          ? ReachabilityStatus.invalidClientCertificateConfiguration
+          : ReachabilityStatus.notReachable;
+      emit(
+        ServerConnectionUnreachable(address: address, status: fallbackStatus),
+      );
     }
+  }
+
+  Future<void> trustCertificateAndRetry({
+    required ServerCertificate certificate,
+    required String address,
+    ClientCertificate? clientCertificate,
+    List<HeaderEntry>? additionalHeaders,
+  }) async {
+    final trustStore =
+        _certificateTrustStore ?? SessionManagerImpl.defaultTrustStore;
+    if (trustStore != null) {
+      await trustStore.trustCertificate(certificate);
+    }
+    checkReachability(
+      address: address,
+      clientCertificate: clientCertificate,
+      additionalHeaders: additionalHeaders,
+    );
   }
 }

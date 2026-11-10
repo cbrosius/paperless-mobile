@@ -1197,5 +1197,39 @@
   "youHaveNoViewsOnYourDashboardYet": "Du hast noch keine Ansichten zu deinem Dashboard hinzugefügt.",
   "@youHaveNoViewsOnYourDashboardYet": {},
   "youreOffline": "Du bist offline.",
-  "@youreOffline": {}
+  "@youreOffline": {},
+  "untrustedCertificate": "Nicht vertrauenswürdiges Zertifikat",
+  "@untrustedCertificate": {},
+  "untrustedCertificateWarning": "Der Server unter {host} verwendet ein nicht vertrauenswürdiges oder selbstsigniertes Zertifikat. Bitte überprüfe den Fingerabdruck, bevor du fortfährst.",
+  "@untrustedCertificateWarning": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "sha256Fingerprint": "SHA-256-Fingerabdruck",
+  "@sha256Fingerprint": {},
+  "certificateIssuer": "Aussteller",
+  "@certificateIssuer": {},
+  "certificateValidity": "Gültig bis",
+  "@certificateValidity": {},
+  "trustCertificate": "Zertifikat vertrauen",
+  "@trustCertificate": {},
+  "trustedCertificates": "Vertrauenswürdige Zertifikate",
+  "@trustedCertificates": {},
+  "manageTrustedCertificates": "Benutzerdefinierte SSL/TLS-Zertifikate verwalten",
+  "@manageTrustedCertificates": {},
+  "noTrustedCertificates": "Keine benutzerdefinierten vertrauenswürdigen Zertifikate",
+  "@noTrustedCertificates": {},
+  "trustedAt": "Vertraut am",
+  "@trustedAt": {},
+  "copiedToClipboard": "{label} in Zwischenablage kopiert",
+  "@copiedToClipboard": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  }
 }

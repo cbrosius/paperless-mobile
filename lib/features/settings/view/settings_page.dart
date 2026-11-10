@@ -15,6 +15,7 @@ import 'package:paperless_mobile/features/settings/view/widgets/enforce_pdf_uplo
 import 'package:paperless_mobile/features/settings/view/widgets/language_selection_setting.dart';
 import 'package:paperless_mobile/features/settings/view/widgets/skip_document_prepraration_on_share_setting.dart';
 import 'package:paperless_mobile/features/settings/view/widgets/theme_mode_setting.dart';
+import 'package:paperless_mobile/features/settings/view/widgets/trusted_certificates_setting.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
@@ -34,6 +35,7 @@ class SettingsPage extends StatelessWidget {
           const ColorSchemeOptionSetting(),
           _buildSectionHeader(context, S.of(context)!.security),
           const BiometricAuthenticationSetting(),
+          const TrustedCertificatesSetting(),
           _buildSectionHeader(context, S.of(context)!.behavior),
           const DefaultDownloadFileTypeSetting(),
           const DefaultShareFileTypeSetting(),
