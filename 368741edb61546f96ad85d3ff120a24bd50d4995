@@ -1,0 +1,30 @@
+# Fix: Use Monochrome Status Icon and App Large Icon in Notifications (#504)
+
+Fixes #504
+
+## Root Cause
+In commit `1172e541`, `LocalNotificationService.initialize()` was updated to use `'paperless_logo_green'` instead of `'ic_stat_paperless_logo_green'`.
+1. `paperless_logo_green.png` is a 1024x1024 full-color image placed solely in `drawable/` without density buckets (`mdpi`, `hdpi`, etc.). Android small notification icon guidelines require a monochrome silhouette (alpha channel only) with proper density-bucketed assets.
+2. OEM skins such as Xiaomi HyperOS / MIUI display the notification's small icon directly on the notification card on the lock screen and shade. Because `paperless_logo_green` is an oversized full-color image, Xiaomi's notification engine fails to tint/downscale it and falls back to a blank square/circle outline placeholder icon (as reported in #504).
+3. Furthermore, notifications (`notifyTaskChanged`, `notifyDocumentDownload`, `notifyFileDownload`, `notifyFileSaved`) did not specify a `largeIcon`, which allows notification shades across various Android flavors (AOSP, Samsung OneUI, HyperOS) to render the full colored app icon (`@mipmap/ic_launcher`) alongside the notification content.
+
+## Solution
+1. **Initialize with official monochrome status icon:**
+   - In `LocalNotificationService.initialize()`, reverted `AndroidInitializationSettings` back to `'ic_stat_paperless_logo_green'` (the pre-existing monochrome silhouette icon available across `drawable-mdpi`, `drawable-hdpi`, `drawable-xhdpi`, `drawable-xxhdpi`, and `drawable-xxxhdpi`).
+2. **Explicit Small & Large Icon configuration:**
+   - In `notifyTaskChanged()`, explicitly configured `icon: 'ic_stat_paperless_logo_green'` and `largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher')`.
+   - In `notifyDocumentDownload()`, `notifyFileDownload()`, and `notifyFileSaved()`, added `largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher')`.
+
+## Visual Comparison (Before & After)
+
+| Reported Bug on Xiaomi HyperOS (#504) | Status Bar Icon with Fix (Emulator) | Notification Shade with Fix (Emulator) |
+|:---:|:---:|:---:|
+| ![Bug on Xiaomi](.git/screenshots/issue-504-user.png) | ![Status Bar](.git/screenshots/issue-504-statusbar.png) | ![After Fix](.git/screenshots/issue-504-after.png) |
+
+## Verification
+- Verified on Android emulator (`emulator-5554`) running an integration test triggering `LocalNotificationService.notifyTaskChanged`:
+  - Verified that the status bar displays the monochrome Paperless leaf logo (`ic_stat_paperless_logo_green`).
+  - Verified that the notification shade displays the colored app launcher icon and proper task status.
+- Code formatted with `fvm dart format`.
+- Static analysis clean (`fvm flutter analyze lib/` reported 0 errors).
+- Existing unit test suite verified (`fvm flutter test test/src/widget_test.dart test/src/login_timeout_test.dart` passed).
