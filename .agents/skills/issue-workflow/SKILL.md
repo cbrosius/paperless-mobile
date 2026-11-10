@@ -43,10 +43,20 @@ This skill defines the standardized end-to-end workflow for resolving issues in 
    - If `git commit` hangs due to `commit.gpgsign=true` without a running SSH agent in background tasks, pass `--no-gpg-sign`.
 
 5. **Visual/UI Bug Screenshot Comparison (Before & After):**
-   - For issues involving visual defects, rendering glitches, broken layouts, alignment problems, or theming/dark mode bugs:
-     - **Before Fix:** Capture a screenshot from the simulator/emulator reproducing the bug (`issue-<number>-before.png`).
-     - **After Fix:** Capture a screenshot from the simulator/emulator displaying the resolved state (`issue-<number>-after.png`).
-     - Save screenshots locally in `.git/screenshots/` so they remain untracked and do not pollute the git repository.
+   - For issues involving visual defects, rendering glitches, broken layouts, alignment problems, missing UI controls, or theming/dark mode bugs:
+     - **Before Fix:** Capture a screenshot from inside the running app on the simulator/emulator reproducing the bug (`issue-<number>-before.png`).
+     - **After Fix:** Capture a screenshot from inside the running app on the simulator/emulator displaying the resolved state on the exact same screen (`issue-<number>-after.png`).
+     - **In-App Screen Requirement:** Screenshots must show the actual application UI exhibiting the bug/fix — **never** the launcher desktop, lock screen, or transition screen.
+     - **Consistent Framing & Soft Keyboard:** Keep both before and after screenshots identically framed. Dismiss or disable the soft keyboard (e.g., `autofocus: false` or `adb shell input keyevent 111`) so bottom controls and lists are not obscured.
+     - **Capturing While App is Active:** Screenshots must be taken *while the app or integration test is actively running and displaying the screen* — never after the test process has already terminated and returned to the OS launcher.
+     - **Robust Capture via adb:** Use direct on-device capture and `adb pull` to avoid Windows PowerShell piping, encoding, and file-lock issues:
+       ```powershell
+       adb shell screencap -p /data/local/tmp/screen.png
+       adb pull /data/local/tmp/screen.png .git/screenshots/issue-<number>-<state>.png
+       adb shell rm /data/local/tmp/screen.png
+       ```
+     - Save screenshots locally in `.git/screenshots/` so they remain untracked.
+     - Always inspect the captured image files using `read_file` to verify they display the intended app screen.
      - Provide a clear before-and-after visual comparison in the PR draft and user status report.
 
 ---
@@ -85,12 +95,19 @@ git checkout -b fix/<short-issue-description>
    git log -L <start>,<end>:<file>
    ```
 4. **Visual/UI Bugs Pre-Fix Capture:**
-   - If the issue is a visual defect (layout overflow, alignment error, broken styling, font/icon glitch, dark/light mode bug), reproduce the bug on the simulator/emulator.
-   - Capture a **Before** screenshot before applying changes:
+   - If the issue is a visual defect (layout overflow, alignment error, broken styling, font/icon glitch, missing UI control, dark/light mode bug), reproduce the bug on the emulator.
+   - **Crucial Requirement:** The screenshot must capture the **active app screen** showing the defect, never the emulator desktop or launcher.
+   - Ensure the screenshots directory exists:
      ```powershell
      if (-not (Test-Path .git\screenshots)) { New-Item -ItemType Directory -Path .git\screenshots }
-     adb exec-out screencap -p > .git\screenshots\issue-<issue-number>-before.png
      ```
+   - Capture directly on-device while the app is actively in the foreground displaying the buggy UI, then pull the file:
+     ```powershell
+     adb shell screencap -p /data/local/tmp/before.png
+     adb pull /data/local/tmp/before.png .git/screenshots/issue-<issue-number>-before.png
+     adb shell rm /data/local/tmp/before.png
+     ```
+   - Inspect the screenshot via the `read_file` tool to confirm that the app screen is properly captured.
 
 ### Step 4: Implementation
 
@@ -121,11 +138,28 @@ git checkout -b fix/<short-issue-description>
      Remove-Item -Force integration_test/temp_<name>_test.dart
      ```
 3. **Visual Bug Verification & After Screenshot:**
-   - For visual/UI bugs, run the app with the fix on the simulator/emulator and capture an **After** screenshot:
+   - For visual/UI bugs, run the app with the fix on the simulator/emulator and capture the **After** screenshot on the exact same screen with consistent framing (dismiss soft keyboard):
      ```powershell
-     adb exec-out screencap -p > .git\screenshots\issue-<issue-number>-after.png
+     adb shell screencap -p /data/local/tmp/after.png
+     adb pull /data/local/tmp/after.png .git/screenshots/issue-<issue-number>-after.png
+     adb shell rm /data/local/tmp/after.png
      ```
-   - Compare before and after screenshots to confirm the defect is fixed and no visual regressions were introduced.
+   - **Automated Capture via Integration Test:** When using a temporary integration test (`integration_test/temp_<name>_test.dart`), emit marker strings in stdout (e.g. `debugPrint('###_READY_###')`), hold the frame with `await Future.delayed(...)`, and trigger the capture while the test process is alive:
+     ```powershell
+     $pinfo = New-Object System.Diagnostics.ProcessStartInfo("fvm.exe", "flutter test integration_test/temp_ui_test.dart -d emulator-5554")
+     $pinfo.RedirectStandardOutput = $true; $pinfo.UseShellExecute = $false
+     $proc = [System.Diagnostics.Process]::Start($pinfo)
+     while (-not $proc.HasExited) {
+         $line = $proc.StandardOutput.ReadLine()
+         if ($line -match "###_READY_###") {
+             Start-Sleep -Seconds 2
+             adb shell screencap -p /data/local/tmp/s.png
+             adb pull /data/local/tmp/s.png .git/screenshots/issue-<number>-after.png
+             adb shell rm /data/local/tmp/s.png
+         }
+     }
+     ```
+   - **Inspect Both Screenshots:** Always inspect both `.git/screenshots/issue-<number>-before.png` and `issue-<number>-after.png` with the `read_file` tool before finishing to confirm they depict the actual app UI, have consistent framing, and clearly demonstrate the fix.
 4. **Static Analysis & Formatting:**
    - Format:
      ```powershell
