@@ -42,6 +42,13 @@ This skill defines the standardized end-to-end workflow for resolving issues in 
    - Run `fvm flutter analyze lib/` (0 errors required).
    - If `git commit` hangs due to `commit.gpgsign=true` without a running SSH agent in background tasks, pass `--no-gpg-sign`.
 
+5. **Visual/UI Bug Screenshot Comparison (Before & After):**
+   - For issues involving visual defects, rendering glitches, broken layouts, alignment problems, or theming/dark mode bugs:
+     - **Before Fix:** Capture a screenshot from the simulator/emulator reproducing the bug (`issue-<number>-before.png`).
+     - **After Fix:** Capture a screenshot from the simulator/emulator displaying the resolved state (`issue-<number>-after.png`).
+     - Save screenshots locally in `.git/screenshots/` so they remain untracked and do not pollute the git repository.
+     - Provide a clear before-and-after visual comparison in the PR draft and user status report.
+
 ---
 
 ## Step-by-Step Workflow
@@ -77,6 +84,13 @@ git checkout -b fix/<short-issue-description>
    ```powershell
    git log -L <start>,<end>:<file>
    ```
+4. **Visual/UI Bugs Pre-Fix Capture:**
+   - If the issue is a visual defect (layout overflow, alignment error, broken styling, font/icon glitch, dark/light mode bug), reproduce the bug on the simulator/emulator.
+   - Capture a **Before** screenshot before applying changes:
+     ```powershell
+     if (-not (Test-Path .git\screenshots)) { New-Item -ItemType Directory -Path .git\screenshots }
+     adb exec-out screencap -p > .git\screenshots\issue-<issue-number>-before.png
+     ```
 
 ### Step 4: Implementation
 
@@ -106,7 +120,13 @@ git checkout -b fix/<short-issue-description>
      ```powershell
      Remove-Item -Force integration_test/temp_<name>_test.dart
      ```
-3. **Static Analysis & Formatting:**
+3. **Visual Bug Verification & After Screenshot:**
+   - For visual/UI bugs, run the app with the fix on the simulator/emulator and capture an **After** screenshot:
+     ```powershell
+     adb exec-out screencap -p > .git\screenshots\issue-<issue-number>-after.png
+     ```
+   - Compare before and after screenshots to confirm the defect is fixed and no visual regressions were introduced.
+4. **Static Analysis & Formatting:**
    - Format:
      ```powershell
      fvm dart format <modified-files>
@@ -143,6 +163,7 @@ git commit --no-gpg-sign -m "fix(<scope>): <description> (#<issue-number>)"
    - Unit tests: <test file path> passed (X/X tests)
    - Emulator verification: Verified on Android Emulator (<AVD name>)
    - Static analysis: `fvm flutter analyze lib/` reports 0 errors
+   - Visual comparison (for UI bugs): Before & after screenshots captured in `.git/screenshots/`
    ```
 3. Attach to commit via Git Notes:
    ```powershell
@@ -165,7 +186,7 @@ git push origin refs/notes/*
 Report back with:
 - Branch name and commit hash.
 - Summary of the root cause and solution.
-- Verification results (test outputs, emulator test results).
+- Verification results (test outputs, emulator test results, and before/after screenshot comparisons for visual bugs).
 - Confirmation of Git Notes attached and pushed to `origin`.
 - Ask for the next issue to tackle.
 
