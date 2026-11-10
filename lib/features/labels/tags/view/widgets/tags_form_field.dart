@@ -57,8 +57,11 @@ class TagsFormField extends StatelessWidget {
                   closedElevation: 0,
                   tappable: enabled,
                   closedBuilder: (context, openForm) {
-                    if (field.value is AnyAssignedTagsQuery ||
-                        field.value is NotAssignedTagsQuery) {
+                    if (field.value is NotAssignedTagsQuery ||
+                        (field.value is AnyAssignedTagsQuery &&
+                            (field.value as AnyAssignedTagsQuery)
+                                .tagIds
+                                .isEmpty)) {
                       return _buildAssignmentOptionInput(
                         context,
                         openForm,
@@ -71,6 +74,7 @@ class TagsFormField extends StatelessWidget {
                       enabled: enabled,
                       children: children.toList(),
                       openForm: openForm,
+                      isAny: field.value is AnyAssignedTagsQuery,
                     );
                   },
                   openBuilder: (context, closeForm) => FullscreenTagsForm(
@@ -100,6 +104,8 @@ class TagsFormField extends StatelessWidget {
     return switch (value) {
       IdsTagsQuery(include: var include) =>
         suggestions.toSet().difference(include.toSet()).toList(),
+      AnyAssignedTagsQuery(tagIds: var tagIds) =>
+        suggestions.toSet().difference(tagIds.toSet()).toList(),
       _ => <int>[],
     };
   }
@@ -119,11 +125,42 @@ class TagsFormField extends StatelessWidget {
         for (var e in exc)
           _buildExcludedTagWidget(context, e, field, query, options),
       ],
+      AnyAssignedTagsQuery(tagIds: final ids) when ids.isNotEmpty => [
+        for (var i in ids)
+          _buildAnyAssignedTagWidget(context, i, field, query, options),
+      ],
       _ => <Widget>[],
     };
     for (var child in widgets) {
       yield child;
     }
+  }
+
+  Widget _buildAnyAssignedTagWidget(
+    BuildContext context,
+    int id,
+    FormFieldState<TagsQuery?> field,
+    AnyAssignedTagsQuery query,
+    Map<int, Tag> options,
+  ) {
+    final tag = options[id];
+
+    return LabelQueryOptionChip(
+      backgroundColor:
+          tag?.color ?? Theme.of(context).colorScheme.secondaryContainer,
+      foregroundColor:
+          tag?.textColor ?? Theme.of(context).colorScheme.onSecondaryContainer,
+      onDeleted: () {
+        final newIds = query.tagIds.where((element) => element != id).toList();
+        if (newIds.isEmpty) {
+          field.didChange(null);
+        } else {
+          field.didChange(query.copyWith(tagIds: newIds));
+        }
+      },
+      exclude: false,
+      labelText: tag?.name ?? '?',
+    );
   }
 
   Widget _buildIncludedTagWidget(
@@ -217,6 +254,7 @@ class TagsFormField extends StatelessWidget {
     required List<Widget> children,
     required bool enabled,
     required VoidCallback openForm,
+    bool isAny = false,
   }) {
     return Container(
       margin: const EdgeInsets.only(top: 6),
@@ -228,7 +266,9 @@ class TagsFormField extends StatelessWidget {
             contentPadding: const EdgeInsets.all(12),
             prefixIcon: const Icon(Icons.label_outline),
             enabled: enabled,
-            labelText: S.of(context)!.tags,
+            labelText: isAny
+                ? '${S.of(context)!.tags} (${S.of(context)!.anyTag})'
+                : S.of(context)!.tags,
           ),
           child: SizedBox(
             height: 32,
@@ -275,6 +315,9 @@ class TagsFormField extends StatelessWidget {
                     IdsTagsQuery(include: var include) => IdsTagsQuery(
                       include: [...include, suggestion.id],
                     ),
+                    AnyAssignedTagsQuery(tagIds: var tagIds)
+                        when tagIds.isNotEmpty =>
+                      AnyAssignedTagsQuery(tagIds: [...tagIds, suggestion.id]),
                     _ => IdsTagsQuery(include: [suggestion.id]),
                   });
                 },

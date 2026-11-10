@@ -4,15 +4,15 @@ import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/context_extensions.dart';
 import 'package:paperless_mobile/core/extensions/flutter_extensions.dart';
 import 'package:paperless_mobile/core/extensions/label_list_extension.dart';
-import 'package:paperless_mobile/features/labels/view/widgets/multi_label_form.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 import 'package:paperless_mobile/routing/routes/labels_route.dart';
 
+enum TagFilterMode { all, any, exclude }
+
 /// A fullscreen form for selecting multiple tags.
 ///
-/// This form follows the same mechanics as [MultiLabelForm], using a single
-/// [SelectionType] and a list of selected IDs. The -1 sentinel represents
-/// the "any assigned" / "not assigned" special option.
+/// This form allows filtering tags by "All" (AND), "Any" (OR), or "Exclude" (NOT).
+/// The -1 sentinel represents the "any assigned" / "not assigned" special option.
 class FullscreenTagsForm extends StatefulWidget {
   final TagsQuery? initialValue;
   final void Function({TagsQuery? returnValue}) onSubmit;
@@ -37,7 +37,7 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
   bool _showClearIcon = false;
   final _textEditingController = TextEditingController();
   final _focusNode = FocusNode();
-  late SelectionType _selectionType;
+  late TagFilterMode _filterMode;
   late List<int> _selectedIds;
 
   @override
@@ -46,16 +46,18 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
     _textEditingController.addListener(() {
       setState(() => _showClearIcon = _textEditingController.text.isNotEmpty);
     });
-    _selectionType = switch (widget.initialValue) {
+    _filterMode = switch (widget.initialValue) {
       IdsTagsQuery(include: final inc, exclude: final exc)
           when inc.isEmpty && exc.isNotEmpty =>
-        SelectionType.exclude,
-      NotAssignedTagsQuery() => SelectionType.exclude,
-      _ => SelectionType.include,
+        TagFilterMode.exclude,
+      AnyAssignedTagsQuery() => TagFilterMode.any,
+      NotAssignedTagsQuery() => TagFilterMode.exclude,
+      _ => TagFilterMode.all,
     };
     _selectedIds = switch (widget.initialValue) {
       IdsTagsQuery(include: final inc, exclude: final exc) =>
         inc.isNotEmpty ? [...inc] : [...exc],
+      AnyAssignedTagsQuery(tagIds: final ids) when ids.isNotEmpty => [...ids],
       AnyAssignedTagsQuery() || NotAssignedTagsQuery() => [-1],
       _ => [],
     };
@@ -106,7 +108,7 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
             title: TextFormField(
               focusNode: _focusNode,
               controller: _textEditingController,
-              autofocus: true,
+              autofocus: widget.autofocus,
               style: theme.textTheme.bodyLarge?.apply(
                 color: theme.colorScheme.onSurface,
               ),
@@ -199,20 +201,22 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
     }
 
     if (_selectedIds.contains(-1)) {
-      switch (_selectionType) {
-        case SelectionType.include:
+      switch (_filterMode) {
+        case TagFilterMode.all:
+        case TagFilterMode.any:
           widget.onSubmit(returnValue: const AnyAssignedTagsQuery());
           return;
-        case SelectionType.exclude:
+        case TagFilterMode.exclude:
           widget.onSubmit(returnValue: const NotAssignedTagsQuery());
           return;
       }
     }
 
     widget.onSubmit(
-      returnValue: switch (_selectionType) {
-        SelectionType.include => IdsTagsQuery(include: _selectedIds),
-        SelectionType.exclude => IdsTagsQuery(exclude: _selectedIds),
+      returnValue: switch (_filterMode) {
+        TagFilterMode.all => IdsTagsQuery(include: _selectedIds),
+        TagFilterMode.any => AnyAssignedTagsQuery(tagIds: _selectedIds),
+        TagFilterMode.exclude => IdsTagsQuery(exclude: _selectedIds),
       },
     );
   }
@@ -239,7 +243,8 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
   String? _buildHintText() {
     return switch (widget.initialValue) {
       NotAssignedTagsQuery() => S.of(context)!.notAssigned,
-      AnyAssignedTagsQuery() => S.of(context)!.anyAssigned,
+      AnyAssignedTagsQuery(tagIds: var tagIds) when tagIds.isEmpty =>
+        S.of(context)!.anyAssigned,
       _ => S.of(context)!.startTyping,
     };
   }
@@ -249,9 +254,9 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
       return ListTile(
         selected: selected,
         selectedTileColor: Theme.of(context).focusColor,
-        title: Text(switch (_selectionType) {
-          SelectionType.include => S.of(context)!.anyAssigned,
-          SelectionType.exclude => S.of(context)!.notAssigned,
+        title: Text(switch (_filterMode) {
+          TagFilterMode.all || TagFilterMode.any => S.of(context)!.anyAssigned,
+          TagFilterMode.exclude => S.of(context)!.notAssigned,
         }),
         onTap: () => _onOptionTap(option),
       );
@@ -293,23 +298,28 @@ class _FullscreenTagsFormState extends State<FullscreenTagsForm> {
   }
 
   Widget _buildIncludeExcludeButtonGroup() {
-    return Flexible(
-      child: SegmentedButton<SelectionType>(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: SegmentedButton<TagFilterMode>(
         showSelectedIcon: false,
         multiSelectionEnabled: false,
-        selected: {_selectionType},
+        selected: {_filterMode},
         onSelectionChanged: (newSelection) {
           setState(() {
-            _selectionType = newSelection.first;
+            _filterMode = newSelection.first;
           });
         },
         segments: [
           ButtonSegment(
-            value: SelectionType.include,
-            label: Text(S.of(context)!.include),
+            value: TagFilterMode.all,
+            label: Text(S.of(context)!.allTags),
           ),
           ButtonSegment(
-            value: SelectionType.exclude,
+            value: TagFilterMode.any,
+            label: Text(S.of(context)!.anyTag),
+          ),
+          ButtonSegment(
+            value: TagFilterMode.exclude,
             label: Text(S.of(context)!.exclude),
           ),
         ],

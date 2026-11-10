@@ -45,26 +45,50 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
                 : const NotAssignedTagsQuery(),
           );
         case RuleTypeEnum.hasTag:
-          assert(filter.tags is IdsTagsQuery);
+          final parsed =
+              value
+                  ?.split(',')
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .map(int.parse)
+                  .toList() ??
+              [];
+          final currentInclude = switch (filter.tags) {
+            IdsTagsQuery(include: var i) => i,
+            _ => <int>[],
+          };
+          final currentExclude = switch (filter.tags) {
+            IdsTagsQuery(exclude: var e) => e,
+            _ => <int>[],
+          };
           return filter.copyWith(
-            tags: switch (filter.tags) {
-              IdsTagsQuery(include: var i, exclude: var e) => IdsTagsQuery(
-                include: [...i, int.parse(value!)],
-                exclude: e,
-              ),
-              _ => filter.tags,
-            },
+            tags: IdsTagsQuery(
+              include: {...currentInclude, ...parsed}.toList(),
+              exclude: currentExclude,
+            ),
           );
         case RuleTypeEnum.doesNotHaveTag:
-          assert(filter.tags is IdsTagsQuery);
+          final parsed =
+              value
+                  ?.split(',')
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .map(int.parse)
+                  .toList() ??
+              [];
+          final currentInclude = switch (filter.tags) {
+            IdsTagsQuery(include: var i) => i,
+            _ => <int>[],
+          };
+          final currentExclude = switch (filter.tags) {
+            IdsTagsQuery(exclude: var e) => e,
+            _ => <int>[],
+          };
           return filter.copyWith(
-            tags: switch (filter.tags) {
-              IdsTagsQuery(include: var i, exclude: var e) => IdsTagsQuery(
-                include: i,
-                exclude: [...e, int.parse(value!)],
-              ),
-              _ => filter.tags,
-            },
+            tags: IdsTagsQuery(
+              include: currentInclude,
+              exclude: {...currentExclude, ...parsed}.toList(),
+            ),
           );
         case RuleTypeEnum.createdBefore:
           if (filter.created is AbsoluteDateRangeQuery) {
@@ -167,13 +191,21 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
         case RuleTypeEnum.moreLikeThis:
           return filter.copyWith(moreLike: int.parse(value!));
         case RuleTypeEnum.hasTagsIn:
+          final parsed =
+              value
+                  ?.split(',')
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .map(int.parse)
+                  .toList() ??
+              [];
+          final currentIds = switch (filter.tags) {
+            AnyAssignedTagsQuery(tagIds: var current) => current,
+            _ => <int>[],
+          };
           return filter.copyWith(
-            tags: IdsTagsQuery(
-              include: value!.split(',').map(int.parse).toList(),
-              exclude: switch (filter.tags) {
-                IdsTagsQuery(exclude: var e) => e,
-                _ => [],
-              },
+            tags: AnyAssignedTagsQuery(
+              tagIds: {...currentIds, ...parsed}.toList(),
             ),
           );
         case RuleTypeEnum.asnGreaterThan:
@@ -350,7 +382,7 @@ extension ToFilterRuleExtension on DocumentFilter {
       ),
       IncludeIdsQueryParameter(ids: var ids) => SavedViewFilterRule(
         ruleType: RuleTypeEnum.hasCorrespondentIn,
-        value: ids.toString(),
+        value: ids.join(','),
       ),
       AnyAssignedIdQueryParameter() => SavedViewFilterRule(
         ruleType: RuleTypeEnum.correspondentIs,
@@ -417,9 +449,20 @@ extension ToFilterRuleExtension on DocumentFilter {
       NotAssignedTagsQuery() => [
         SavedViewFilterRule(ruleType: RuleTypeEnum.hasAnyTag, value: 'false'),
       ],
-      AnyAssignedTagsQuery() => [
-        SavedViewFilterRule(ruleType: RuleTypeEnum.hasAnyTag, value: 'true'),
-      ],
+      AnyAssignedTagsQuery(tagIds: var tagIds) =>
+        tagIds.isEmpty
+            ? [
+                SavedViewFilterRule(
+                  ruleType: RuleTypeEnum.hasAnyTag,
+                  value: 'true',
+                ),
+              ]
+            : [
+                SavedViewFilterRule(
+                  ruleType: RuleTypeEnum.hasTagsIn,
+                  value: tagIds.join(','),
+                ),
+              ],
       IdsTagsQuery(include: var include, exclude: var exclude) => [
         ...include.map(
           (id) => SavedViewFilterRule(

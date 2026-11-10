@@ -40,7 +40,8 @@ extension TagsQueryMethods on TagsQuery {
   bool matches(Iterable<int> ids) {
     return when(
       notAssigned: () => ids.isEmpty,
-      anyAssigned: (tagIds) => ids.isNotEmpty,
+      anyAssigned: (tagIds) =>
+          tagIds.isEmpty ? ids.isNotEmpty : tagIds.any((t) => ids.contains(t)),
       ids: (include, exclude) =>
           include.toSet().difference(ids.toSet()).isEmpty &&
           exclude.toSet().intersection(ids.toSet()).isEmpty,
@@ -51,7 +52,18 @@ extension TagsQueryMethods on TagsQuery {
     return when(
       notAssigned: () => TagsQuery.ids(include: [id]),
       anyAssigned: (tagIds) {
-        return TagsQuery.ids(include: [id]);
+        if (tagIds.isEmpty) {
+          return TagsQuery.anyAssigned(tagIds: [id]);
+        }
+        final newIds = List<int>.from(tagIds);
+        if (newIds.contains(id)) {
+          newIds.remove(id);
+        } else {
+          newIds.add(id);
+        }
+        return newIds.isEmpty
+            ? const TagsQuery.anyAssigned()
+            : TagsQuery.anyAssigned(tagIds: newIds);
       },
       ids: (include, exclude) {
         final newInclude = List<int>.from(include);

@@ -102,7 +102,7 @@ abstract class DocumentFilter with _$DocumentFilter {
     },
     switch (tags) {
       NotAssignedTagsQuery() => 1,
-      AnyAssignedTagsQuery(tagIds: var tags) => tags.length,
+      AnyAssignedTagsQuery(tagIds: var tags) => tags.isEmpty ? 1 : tags.length,
       IdsTagsQuery(include: var i, exclude: var e) => e.length + i.length,
     },
     switch (added) {
