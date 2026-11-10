@@ -1,0 +1,37 @@
+# fix(security): verify untrusted server certificates with user trust store (#256)
+
+Closes #256
+
+## Overview
+
+Previously, `SessionManagerImpl` contained:
+```dart
+..badCertificateCallback = (cert, host, port) => true;
+```
+which globally disabled TLS certificate validation. Any untrusted, self-signed, expired, or MITM certificate was accepted without informing or prompting the user.
+
+This PR implements proper Trust-On-First-Use (TOFU) and user-prompted certificate pinning for self-signed or private CA certificates:
+1. **Removed insecure bypass**: `badCertificateCallback` no longer unconditionally accepts invalid certificates.
+2. **Certificate Fingerprinting & Trust Store**:
+   - `ServerCertificate` calculates SHA-256 fingerprints from the certificate's DER encoding and stores host, port, subject, issuer, and validity window.
+   - `CertificateTrustStore` / `CertificateTrustStoreImpl` provides synchronous verification via an in-memory cache backed by persistent `SharedPreferences`.
+3. **Interactive Warning & Trust Dialog**:
+   - During server reachability checking (`isPaperlessServerReachable`), untrusted certificates are captured and mapped to `ReachabilityStatus.untrustedServerCertificate`.
+   - `ServerConnectionCubit` emits `ServerConnectionUntrustedCertificate`.
+   - `UntrustedCertificateDialog` warns the user and displays host, SHA-256 fingerprint (formatted `AA:BB:...`), issuer, and validity period, with a one-tap copy button and "Trust Certificate" / "Cancel" actions.
+4. **Settings Management**:
+   - Added `TrustedCertificatesSetting` under Settings -> Security allowing users to review and revoke/delete previously trusted certificates.
+5. **Localization**:
+   - English and German localizations added for all new dialogs and settings.
+
+## Testing
+
+- Unit tests in `test/src/server_certificate_trust_test.dart` verifying:
+  - `ServerCertificate` fingerprint generation and JSON serialization.
+  - `CertificateTrustStore` trust, query, and untrust lifecycle.
+  - `SessionManagerImpl` rejection of untrusted certificates and acceptance when trusted.
+  - `ConnectivityStatusServiceImpl.isPaperlessServerReachable` handling of untrusted certificates.
+  - `ServerConnectionCubit` state transitions and `trustCertificateAndRetry`.
+- Integration test on Android emulator (`emulator-5554`) verifying `badCertificateCallback` behavior with real native BoringSSL/OpenSSL sockets.
+- Existing reachability and timeout tests (`test/src/reachability_probe_test.dart`, `test/src/login_timeout_test.dart`) passing.
+- Static analysis clean (`flutter analyze lib` reports 0 issues).
