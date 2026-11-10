@@ -1,0 +1,34 @@
+# Description
+Fixes #495
+Fixes #422
+
+### Root Cause
+1. **Dynamic Notification Channel IDs:**
+   In `LocalNotificationService`, channel IDs were created by appending dynamic object identifiers:
+   - `notifyTaskChanged`: `'${NotificationChannel.task.id}_${task.id}'` (e.g. `task_channel_101`)
+   - `notifyFileDownload`: `"${NotificationChannel.fileDownload.id}_${filePath.hashCode}"`
+   - `notifyFileSaved`: `"${NotificationChannel.documentDownload.id}_$filename"`
+   In Android 8.0+ (API 26+), notification channels represent categories configured in system settings. Because every document upload or download generated a new channel ID with the same display name (*"Paperless tasks"*), Android created a brand new category in system settings for each task. If a user disabled notifications for a task category, subsequent tasks generated new channels with default (enabled) permissions, ignoring the user's preference and filling Android notification settings with dozens of duplicate categories.
+2. **Incomplete Upstream Fix in v4.4.0:**
+   Commit `7c36b467` (#615) unified channel IDs for `notifyDocumentDownload`, but left `notifyTaskChanged`, `notifyFileDownload`, and `notifyFileSaved` using dynamic IDs.
+3. **Unhandled Task Statuses & Crash Risk:**
+   `notifyTaskChanged` only handled `StatusEnum.started`, `pending`, `failure`, and `success`. If a task had status `received`, `revoked`, or `retry`, the switch statement fell through to `default`, leaving `late String title` uninitialized and throwing a `LateInitializationError`.
+
+### Solution
+1. **Static Notification Channel IDs:**
+   - Unified `notifyTaskChanged` to use `NotificationChannel.task.id` (`task_channel`).
+   - Unified `notifyFileDownload` to use `NotificationChannel.fileDownload.id` (`file_download_channel`).
+   - Unified `notifyFileSaved` to use `NotificationChannel.documentDownload.id` (`document_download_channel`).
+2. **Legacy Channel Cleanup on Startup:**
+   - In `LocalNotificationService.initialize()`, queried existing notification channels via `getNotificationChannels()` and deleted any orphaned channels matching prefix `${NotificationChannel.task.id}_`, `${NotificationChannel.fileDownload.id}_`, or `${NotificationChannel.documentDownload.id}_`.
+3. **Defensive Task Status Handling:**
+   - Supported `StatusEnum.received` alongside `started` (*"Document received"*).
+   - Supported `StatusEnum.revoked` alongside `failure` (*"Failed to process document"*).
+   - Added handling for `StatusEnum.retry` (*"Retrying document processing..."*).
+   - Returned early for unknown or null statuses to avoid uninitialized variable exceptions.
+
+### Verification
+- **Unit Tests:** `test/src/features/notifications/local_notification_service_test.dart` passed (5/5 tests passing: static task channel across tasks, all status enum values, null status graceful handling, static file download channel, and static document download channel).
+- **Emulator Verification:** Verified on Android Emulator (`emulator-5554`) that `initialize()` successfully cleaned up orphaned channels (e.g. `task_channel_101`) and posted notifications to the single static `task_channel`.
+- **Static Analysis:** `fvm flutter analyze lib/` reports 0 errors/warnings on modified code.
+- **Formatting:** Dart files formatted with `fvm dart format`.
