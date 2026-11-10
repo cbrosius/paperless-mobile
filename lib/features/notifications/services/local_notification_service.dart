@@ -23,7 +23,7 @@ class LocalNotificationService {
 
   Future<void> initialize() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('paperless_logo_green');
+        AndroidInitializationSettings('ic_stat_paperless_logo_green');
     final DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings(
           requestSoundPermission: false,
@@ -63,6 +63,7 @@ class LocalNotificationService {
           when: DateTime.now().millisecondsSinceEpoch,
           category: AndroidNotificationCategory.status,
           icon: 'file_download_done',
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
         ),
       ),
       payload: jsonEncode(
@@ -102,6 +103,7 @@ class LocalNotificationService {
           when: DateTime.now().millisecondsSinceEpoch,
           category: AndroidNotificationCategory.progress,
           icon: finished ? 'file_download_done' : 'downloading',
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           channelDescription: 'Notifications for document download status',
         ),
       ),
@@ -146,6 +148,7 @@ class LocalNotificationService {
           when: DateTime.now().millisecondsSinceEpoch,
           category: AndroidNotificationCategory.progress,
           icon: finished ? 'file_download_done' : 'downloading',
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
         ),
         iOS: DarwinNotificationDetails(
           attachments: [DarwinNotificationAttachment(filePath)],
@@ -207,6 +210,8 @@ class LocalNotificationService {
           '${NotificationChannel.task.id}_${task.id}',
           NotificationChannel.task.name,
           category: AndroidNotificationCategory.status,
+          icon: 'ic_stat_paperless_logo_green',
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           ongoing: showProgress,
           showProgress: showProgress,
           maxProgress: 100,
