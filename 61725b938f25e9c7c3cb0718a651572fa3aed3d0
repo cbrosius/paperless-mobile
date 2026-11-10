@@ -1,0 +1,34 @@
+# Fix: Support Tag Filter Option "Any" in Saved Views (#428)
+
+Fixes #428
+
+## Root Cause
+When saving or reloading a saved view with tag filter mode set to "Any", the filter was discarded or converted incorrectly:
+1. `RuleTypeEnum.hasTagsIn` (Rule 22: `tags__id__in`, inclusive OR / "Any") was incorrectly mapped in `filter_rule_extension.dart` to `IdsTagsQuery` (which represents strict AND / `tags__id__all`), and did not handle multiple accumulated rules.
+2. In `toFilterRules()`, `AnyAssignedTagsQuery` discarded any specific `tagIds` and only emitted Rule 7 (`hasAnyTag: true`), causing the saved view to lose the specific tags upon saving to Paperless-ngx.
+3. In `TagsFormField` and `FullscreenTagsForm`, "Any" tag filtering was not represented in the UI: chips were not displayed for `AnyAssignedTagsQuery`, and `FullscreenTagsForm` only supported a 2-way toggle (Include / Exclude) rather than a 3-way mode ("All" / "Any" / "Exclude").
+
+## Solution
+1. **Filter Rule Serialization / Deserialization (`filter_rule_extension.dart`):**
+   - Mapped `RuleTypeEnum.hasTagsIn` to `AnyAssignedTagsQuery(tagIds: [...])` with robust comma-separated and multiple rule accumulation.
+   - Fixed `RuleTypeEnum.hasTag` and `RuleTypeEnum.doesNotHaveTag` accumulation to avoid assertion errors.
+   - In `toFilterRules()`, `AnyAssignedTagsQuery` with `tagIds` serializes to `RuleTypeEnum.hasTagsIn` (Rule 22) with a comma-separated list of IDs; empty `AnyAssignedTagsQuery` serializes to `RuleTypeEnum.hasAnyTag` (Rule 7, `"true"`).
+   - Fixed `hasCorrespondentIn` serialization from `ids.toString()` to `ids.join(',')`.
+2. **Model & Filter Updates:**
+   - Updated `AnyAssignedTagsQuery.matches()` and `toggleInclude()` to properly handle `tagIds`.
+   - Updated `DocumentFilter.appliedFiltersCount` to count tags for `AnyAssignedTagsQuery`.
+3. **Form & Selection UI (`tags_form_field.dart`, `fullscreen_tags_form.dart`):**
+   - Added a 3-way `SegmentedButton<TagFilterMode>` with segments for All (`S.of(context)!.allTags`), Any (`S.of(context)!.anyTag`), and Exclude (`S.of(context)!.exclude`).
+   - Added tag chip rendering and removal support for `AnyAssignedTagsQuery` in `TagsFormField`.
+   - Updated form field label to indicate when "Any" mode is active (`Tags (Any)`).
+
+## Visual Comparison (Before & After)
+
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-428-before.png) | ![After](.git/screenshots/issue-428-after.png) |
+
+## Verification
+- Added 8 unit tests in `test/src/saved_view_tag_filter_any_test.dart` verifying rule serialization/deserialization, rule accumulation, and round-trip preservation. All passed.
+- Verified on Android emulator (`emulator-5554`) with integration test rendering `FullscreenTagsForm` and confirming 3-way segmentation and tag selection.
+- Static analysis clean (`fvm flutter analyze` reported 0 issues).
