@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:paperless_mobile/api/converters/document_date_json_converter.dart';
 import 'package:paperless_mobile/api/models/custom_field_instance.dart';
 import 'package:paperless_mobile/api/models/document_permissions.dart';
 import 'package:paperless_mobile/api/models/note.dart';
@@ -18,8 +19,10 @@ abstract class Document with _$Document {
     /// The raw, text-only data of the document. This field is primarily used for searching.
     String? content,
     List<int>? tags,
-    DateTime? created,
-    @Deprecated('createdDate has been deprecated') DateTime? createdDate,
+    @DocumentDateJsonConverter() DateTime? created,
+    @DocumentDateJsonConverter()
+    @Deprecated('createdDate has been deprecated')
+    DateTime? createdDate,
     DateTime? modified,
     DateTime? added,
     DateTime? deletedAt,

@@ -560,7 +560,7 @@ class _InboxItemState extends State<InboxItem> {
                     ),
                   ),
             ...suggestions.dates
-                .map(DateTime.parse)
+                .map((d) => DateTime.parse(d.split('T').first))
                 .whereNot(
                   (e) => widget.document.created?.isOnSameDayAs(e) ?? false,
                 )

@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_annotation_target
 
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:paperless_mobile/api/converters/document_date_json_converter.dart';
 import 'package:paperless_mobile/api/models/correspondent_request_set_permissions.dart';
 import 'package:paperless_mobile/api/models/custom_field_instance_request.dart';
 
@@ -18,8 +19,10 @@ abstract class DocumentRequest with _$DocumentRequest {
     /// The raw, text-only data of the document. This field is primarily used for searching.
     String? content,
     required List<int> tags,
-    DateTime? created,
-    @Deprecated('createdDate has been deprecated') DateTime? createdDate,
+    @DocumentDateJsonConverter() DateTime? created,
+    @DocumentDateJsonConverter()
+    @Deprecated('createdDate has been deprecated')
+    DateTime? createdDate,
     DateTime? deletedAt,
 
     /// The position of this document in your physical document archive.

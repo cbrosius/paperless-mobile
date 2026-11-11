@@ -110,7 +110,7 @@ class _DocumentEditPageState extends State<DocumentEditPage>
                 doc.documentType != documentType ||
                 doc.storagePath != storagePath ||
                 !const UnorderedIterableEquality().equals(doc.tags, tags) ||
-                doc.created != createdAt ||
+                !_isSameDay(doc.created, createdAt) ||
                 (doc.content != content && isContentTouched) ||
                 !const ListEquality<CustomFieldInstance>().equals(
                   doc.customFields ?? [],
@@ -453,7 +453,9 @@ class _DocumentEditPageState extends State<DocumentEditPage>
           tags: PatchedValue(tags),
           content: PatchedValue(content),
           title: PatchedValue(title),
-          created: PatchedValue(createdAt),
+          created: _isSameDay(document.created, createdAt)
+              ? null
+              : PatchedValue(createdAt),
           customFields: PatchedValue(customFieldRequests),
         );
         final result = await context
@@ -510,7 +512,9 @@ class _DocumentEditPageState extends State<DocumentEditPage>
         ),
         if (hasSuggestedDates)
           _buildSuggestionsSkeleton<DateTime>(
-            suggestions: filteredSuggestions!.dates.map(DateTime.parse),
+            suggestions: filteredSuggestions!.dates.map(
+              (d) => DateTime.parse(d.split('T').first),
+            ),
             itemBuilder: (context, itemData) => ActionChip(
               label: Text(context.displayDateFormat.format(itemData)),
               onPressed: () => _formKey.currentState?.fields[fkCreatedDate]
@@ -519,6 +523,12 @@ class _DocumentEditPageState extends State<DocumentEditPage>
           ),
       ],
     );
+  }
+
+  static bool _isSameDay(DateTime? a, DateTime? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   ///

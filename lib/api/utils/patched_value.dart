@@ -1,3 +1,5 @@
+import 'package:paperless_mobile/api/constants/api_date_format.dart';
+
 /// A wrapper type that represents a value that can be:
 /// 1. Not provided (field is `null` in Dart) - excluded from JSON
 /// 2. Explicitly set to null (`PatchedValue(null)`) - included as `null` in JSON
@@ -52,6 +54,12 @@ Map<String, dynamic> processPatchedValueJson(Map<String, dynamic> json) {
 /// Helper to serialize values with special handling for DateTime
 dynamic _serializeValue(dynamic value) {
   if (value is DateTime) {
+    if (value.hour == 0 &&
+        value.minute == 0 &&
+        value.second == 0 &&
+        value.millisecond == 0) {
+      return apiDateFormat.format(value);
+    }
     return value.toIso8601String();
   }
 
