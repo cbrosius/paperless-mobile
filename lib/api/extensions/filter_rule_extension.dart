@@ -264,6 +264,29 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
               ),
             );
           }
+        case RuleTypeEnum.hasCustomFieldIn:
+          return filter.copyWith(
+            customFields: IdQueryParameter.include(
+              ids: value!.split(',').map(int.parse).toList(),
+            ),
+          );
+        case RuleTypeEnum.doesNotHaveCustomFieldIn:
+          return filter.copyWith(
+            customFields: IdQueryParameter.exclude(
+              ids: value!.split(',').map(int.parse).toList(),
+            ),
+          );
+        case RuleTypeEnum.hasCustomFields:
+          return filter.copyWith(
+            customFields: const AnyAssignedIdQueryParameter(),
+          );
+        case RuleTypeEnum.doesNotHaveCustomField:
+          return filter.copyWith(
+            customFields: const NotAssignedIdQueryParameter(),
+          );
+        case RuleTypeEnum.hasCustomFieldValue:
+        case RuleTypeEnum.customFieldsQuery:
+          return filter.copyWith(customFieldQuery: value);
         default:
           logger.fw(
             'Unsupported filter rule: ${ruleType.name} (#${ruleType.value})',
@@ -623,6 +646,52 @@ extension ToFilterRuleExtension on DocumentFilter {
         break;
       default:
         break;
+    }
+
+    // Parse custom fields
+    if (customFields is IncludeIdsQueryParameter) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.hasCustomFieldIn,
+          value: (customFields as IncludeIdsQueryParameter).ids.join(','),
+        ),
+      );
+    } else if (customFields is ExcludeIdsQueryParameter) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.doesNotHaveCustomFieldIn,
+          value: (customFields as ExcludeIdsQueryParameter).ids.join(','),
+        ),
+      );
+    } else if (customFields is AnyAssignedIdQueryParameter) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.hasCustomFields,
+          value: 'true',
+        ),
+      );
+    } else if (customFields is NotAssignedIdQueryParameter) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.doesNotHaveCustomField,
+          value: 'true',
+        ),
+      );
+    } else if (customFields is SingleIdQueryParameter) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.hasCustomFieldIn,
+          value: (customFields as SingleIdQueryParameter).id.toString(),
+        ),
+      );
+    }
+    if (customFieldQuery != null && customFieldQuery!.isNotEmpty) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.customFieldsQuery,
+          value: customFieldQuery!,
+        ),
+      );
     }
 
     //Join values of all extended filter rules if exist

@@ -39,6 +39,8 @@ abstract class DocumentFilter with _$DocumentFilter {
     int? selectedView,
     List<String>? fields,
     List<int>? documentIds,
+    @Default(IdQueryParameter.unset()) IdQueryParameter customFields,
+    String? customFieldQuery,
   }) = _DocumentFilter;
 
   bool get forceExtendedQuery {
@@ -65,6 +67,9 @@ abstract class DocumentFilter with _$DocumentFilter {
       ...created.toQueryParameter(DateRangeQueryField.created).entries,
       ...modified.toQueryParameter(DateRangeQueryField.modified).entries,
       ...owner.toQueryParameter('owner').entries,
+      ...customFields.toQueryParameter('custom_fields').entries,
+      if (customFieldQuery != null && customFieldQuery!.isNotEmpty)
+        MapEntry('custom_field_query', customFieldQuery!),
       ...query.toQueryParameter().entries,
       if (sortField != null)
         MapEntry('ordering', '${sortOrder.queryString}${sortField!.value}'),
@@ -125,6 +130,11 @@ abstract class DocumentFilter with _$DocumentFilter {
       UnsetIdQueryParameter() => 0,
       _ => 1,
     },
+    switch (customFields) {
+      UnsetIdQueryParameter() => 0,
+      _ => 1,
+    },
+    if (customFieldQuery != null && customFieldQuery!.isNotEmpty) 1 else 0,
     (query.queryText?.isNotEmpty ?? false) ? 1 : 0,
   ].fold(0, (previousValue, element) => previousValue + element);
 
