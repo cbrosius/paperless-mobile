@@ -1,0 +1,40 @@
+# Description
+Fixes #286
+Fixes #663
+
+### Root Cause
+1. **Timezone Offset Shift During JSON Parsing:**
+   In Paperless-ngx, a document's `created` date represents a calendar date (`YYYY-MM-DD`). However, Django REST Framework returns `DateTimeField` strings formatted with the server's timezone offset (e.g. `"2023-10-10T00:00:00+02:00"`). Dart's standard `DateTime.parse()` automatically converts strings with timezone offsets into UTC (`2023-10-09 22:00:00.000Z`, `isUtc=true`), causing the day to shift back from October 10th to October 9th.
+2. **Unconditional `created` Field in Document Edit PATCH Requests:**
+   In `DocumentEditPage._onSubmit`, `created: PatchedValue(createdAt)` was sent unconditionally on every save, even when the user only modified unrelated fields (such as document type, correspondent, or tags). Because the parsed date had already shifted back by one day, every subsequent save shifted the document's date back by another day repeatedly.
+3. **Sub-optimal Serialization of Calendar Dates:**
+   In `PatchedValue._serializeValue`, `DateTime` objects were serialized using `toIso8601String()`, producing `"YYYY-MM-DDTHH:mm:ss.000"`. When submitted to Django REST Framework, midnight timestamps are re-parsed within the server timezone, compounding timezone translation discrepancies.
+4. **Date Suggestion Chips:**
+   In `DocumentEditPage` and `InboxItem`, suggestion chips mapped `suggestions.dates` with `DateTime.parse` directly, causing suggested dates returned with positive timezone offsets to shift backward upon click.
+
+### Solution
+1. **`DocumentDateJsonConverter`:**
+   Created `DocumentDateJsonConverter` which parses calendar dates by extracting the date component (`json.split('T').first`) before passing it to `DateTime.parse()`. This guarantees that calendar dates are always parsed as local midnight on the intended day, completely immune to server timezone offsets.
+2. **Model Annotations:**
+   Annotated `created` and `createdDate` with `@DocumentDateJsonConverter()` in both `Document` and `DocumentRequest`.
+3. **Calendar Date Serialization in `PatchedValue`:**
+   Updated `_serializeValue` to format calendar dates (`hour == 0 && minute == 0 && second == 0 && millisecond == 0`) as `YYYY-MM-DD` using `apiDateFormat.format(value)`.
+4. **Conditional Date Inclusion in `DocumentEditPage`:**
+   - Updated `hasChangesPredicate` and `_onSubmit` to compare calendar days using `_isSameDay`.
+   - Set `created: _isSameDay(document.created, createdAt) ? null : PatchedValue(createdAt)` so that unchanged creation dates are omitted from PATCH requests.
+5. **Date Suggestions Mapping:**
+   Updated date suggestions in `DocumentEditPage` and `InboxItem` to parse `d.split('T').first`, ensuring suggestion chips display and apply the exact intended calendar date.
+
+### Verification
+- **Unit Tests:** Created comprehensive unit tests in `test/src/features/document_edit/document_date_converter_test.dart` (9 test cases passing):
+  - Parsing date-only strings (`"2023-10-10"` -> 2023-10-10)
+  - Parsing ISO 8601 strings with positive timezone offsets (`"2023-10-10T00:00:00+02:00"` -> 2023-10-10)
+  - Parsing ISO 8601 strings with UTC indicator (`"2023-10-10T00:00:00Z"` -> 2023-10-10)
+  - Parsing ISO 8601 strings with time components
+  - Serialization to `YYYY-MM-DD`
+  - `Document.fromJson` parsing with timezone offsets and UTC
+  - `PatchedDocumentRequest` calendar date serialization as `YYYY-MM-DD`
+  - `PatchedDocumentRequest` omission of unchanged `created` field
+- **Widget Tests:** `test/src/widget_test.dart` passing (10/10 tests passing total).
+- **Static Analysis:** `fvm flutter analyze` reports 0 errors and 0 warnings on all modified and new files.
+- **Formatting:** Formatted with `fvm dart format`.
