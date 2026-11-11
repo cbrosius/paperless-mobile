@@ -1,0 +1,16 @@
+# Pull Request: Persist sort field and order when updating a saved view (#457)
+
+## Summary
+Resolves #457.
+Fixes an issue where updating an existing saved view after modifying document sorting did not persist the updated sort field or sort order to the server.
+
+## Root Cause
+In `SavedViewsWidget` (`lib/features/documents/view/widgets/saved_views/saved_views_widget.dart`), when the user clicked "Save changes", `selectedView!.copyWith(...)` updated only `filterRules`. It did not pass `sortField` or `sortReverse` from `widget.filter`. Consequently, `newView.toRequest()` preserved the stale/initial sorting values, sending them to the backend in the update request.
+
+## Changes
+- In `SavedViewsWidget`: Added `sortField: widget.filter.sortField?.value` and `sortReverse: widget.filter.sortOrder == SortOrder.descending` to `selectedView!.copyWith(...)` when updating a view.
+- Added unit tests in `test/src/features/documents/saved_view_sort_test.dart` to verify that `sortField` and `sortReverse` are properly updated and transmitted via `toRequest()`.
+
+## Verification
+- `fvm flutter test test/src/features/documents/saved_view_sort_test.dart` (3 passed)
+- Code formatted with `fvm dart format` and verified against formatting rules.
