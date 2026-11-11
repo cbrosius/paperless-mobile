@@ -1,0 +1,13 @@
+# PR: Fix Document Filtering by Owner and Unowned Saved Views (#417)
+
+## Summary
+When users selected saved views created in the browser filtering by document owner or "Unowned", the app failed to filter documents properly and displayed all available documents. In addition, opening the filter drawer wiped out the owner filter, and `DocumentFilterExtension.toFilterRules()` lacked owner serialization.
+
+This PR:
+- Handles null/empty values gracefully in `SavedViewFilterRuleExtension.applyToFilter` for `RuleTypeEnum.ownerIs`, `hasOwnerIn`, `doesNotHaveOwner`, and `doesNotHaveOwnerIn`.
+- Serializes `owner` back to filter rules in `toFilterRules()`.
+- Generates `owner__isnull=true` / `owner__isnull=false` for boolean unowned/owned lookups in `IdQueryParameterMethods.toQueryParameter`.
+- Preserves `owner` in `DocumentFilterForm.toFilter`.
+- Adds unit tests in `owner_filter_test.dart` for owner query parameter generation, rule parsing, and round-trip serialization.
+
+Closes #417.
