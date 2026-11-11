@@ -264,6 +264,25 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
               ),
             );
           }
+        case RuleTypeEnum.hasCustomFieldValue:
+        case RuleTypeEnum.customFieldsQuery:
+          if (value == null || value!.isEmpty) {
+            return filter;
+          }
+          if (filter.customFieldQuery == null ||
+              filter.customFieldQuery!.isEmpty) {
+            return filter.copyWith(customFieldQuery: value);
+          } else {
+            final existing = filter.customFieldQuery!;
+            if (existing.startsWith('["AND",') && existing.endsWith(']')) {
+              final inner = existing.substring(0, existing.length - 1);
+              return filter.copyWith(customFieldQuery: '$inner,$value]');
+            } else {
+              return filter.copyWith(
+                customFieldQuery: '["AND",[$existing,$value]]',
+              );
+            }
+          }
         default:
           logger.fw(
             'Unsupported filter rule: ${ruleType.name} (#${ruleType.value})',
@@ -643,6 +662,15 @@ extension ToFilterRuleExtension on DocumentFilter {
             value: mergedFulltextQueryRule,
           ),
         );
+    }
+
+    if (customFieldQuery != null && customFieldQuery!.isNotEmpty) {
+      filterRules.add(
+        SavedViewFilterRule(
+          ruleType: RuleTypeEnum.customFieldsQuery,
+          value: customFieldQuery!,
+        ),
+      );
     }
     return filterRules;
   }

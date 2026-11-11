@@ -35,6 +35,7 @@ abstract class DocumentFilter with _$DocumentFilter {
     @Default(UnsetDateRangeQuery()) DateRangeQuery created,
     @Default(UnsetDateRangeQuery()) DateRangeQuery modified,
     @Default(IdQueryParameter.unset()) IdQueryParameter owner,
+    String? customFieldQuery,
     int? moreLike,
     int? selectedView,
     List<String>? fields,
@@ -66,6 +67,8 @@ abstract class DocumentFilter with _$DocumentFilter {
       ...modified.toQueryParameter(DateRangeQueryField.modified).entries,
       ...owner.toQueryParameter('owner').entries,
       ...query.toQueryParameter().entries,
+      if (customFieldQuery != null && customFieldQuery!.isNotEmpty)
+        MapEntry('custom_field_query', customFieldQuery),
       if (sortField != null)
         MapEntry('ordering', '${sortOrder.queryString}${sortField!.value}'),
       if (moreLike != null) MapEntry('more_like_id', moreLike),
@@ -125,6 +128,7 @@ abstract class DocumentFilter with _$DocumentFilter {
       UnsetIdQueryParameter() => 0,
       _ => 1,
     },
+    (customFieldQuery?.isNotEmpty ?? false) ? 1 : 0,
     (query.queryText?.isNotEmpty ?? false) ? 1 : 0,
   ].fold(0, (previousValue, element) => previousValue + element);
 
