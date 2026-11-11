@@ -271,6 +271,7 @@ class _CustomFieldEditFormState extends State<_CustomFieldEditForm> {
       DataTypeEnum.monetary => 'Monetary',
       DataTypeEnum.documentlink => 'Document Link',
       DataTypeEnum.select => 'Select',
+      DataTypeEnum.longtext => 'Long Text',
     };
   }
 }

@@ -66,7 +66,7 @@ class _CustomFieldValue extends StatelessWidget {
     final placeholder = Text('-', style: textStyle);
 
     return switch (dataType) {
-      DataTypeEnum.string => StringFieldValue(
+      DataTypeEnum.string || DataTypeEnum.longtext => StringFieldValue(
         value: value,
         style: textStyle,
         placeholder: placeholder,

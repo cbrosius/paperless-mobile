@@ -84,7 +84,7 @@ class CustomFieldValueEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (dataType) {
-      DataTypeEnum.string => StringFormField(
+      DataTypeEnum.string || DataTypeEnum.longtext => StringFormField(
         labelText: labelText,
         value: value,
         enabled: enabled,

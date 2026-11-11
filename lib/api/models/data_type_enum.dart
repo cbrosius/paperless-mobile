@@ -1,3 +1,6 @@
+import 'package:json_annotation/json_annotation.dart';
+
+@JsonEnum(alwaysCreate: true)
 enum DataTypeEnum {
   string,
   url,
@@ -7,7 +10,8 @@ enum DataTypeEnum {
   float,
   monetary,
   documentlink,
-  select;
+  select,
+  longtext;
 
   @override
   String toString() => name;

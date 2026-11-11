@@ -48,6 +48,7 @@ class CustomFieldListItem extends StatelessWidget {
       DataTypeEnum.monetary => S.of(context)!.customFieldTypeMonetary,
       DataTypeEnum.documentlink => S.of(context)!.customFieldTypeDocumentLink,
       DataTypeEnum.select => S.of(context)!.customFieldTypeSelect,
+      DataTypeEnum.longtext => 'Long Text',
     };
   }
 }

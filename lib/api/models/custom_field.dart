@@ -9,6 +9,7 @@ abstract class CustomField with _$CustomField {
   factory CustomField({
     required int id,
     required String name,
+    @JsonKey(name: 'data_type', unknownEnumValue: DataTypeEnum.string)
     required DataTypeEnum dataType,
 
     /// Extra data for the custom field, such as select options

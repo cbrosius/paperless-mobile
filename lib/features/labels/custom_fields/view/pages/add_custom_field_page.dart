@@ -182,6 +182,7 @@ class _CustomFieldFormState extends State<_CustomFieldForm> {
       DataTypeEnum.monetary => 'Monetary',
       DataTypeEnum.documentlink => 'Document Link',
       DataTypeEnum.select => 'Select',
+      DataTypeEnum.longtext => 'Long Text',
     };
   }
 }

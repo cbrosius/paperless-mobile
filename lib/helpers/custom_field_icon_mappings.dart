@@ -12,5 +12,6 @@ IconData getCustomFieldIcon(DataTypeEnum dataType) {
     DataTypeEnum.documentlink => Icons.link,
     DataTypeEnum.url => Icons.public,
     DataTypeEnum.monetary => Icons.attach_money,
+    DataTypeEnum.longtext => Icons.notes,
   };
 }
