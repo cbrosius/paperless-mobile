@@ -1,0 +1,12 @@
+# PR: Support custom field filter rules in DocumentFilter and Saved Views (#686)
+
+## Summary
+Paperless-ngx supports filtering documents by custom fields (`custom_fields__id__in`, `custom_fields__id__none`, `custom_fields__isnull`, `custom_field_query`). However, in `SavedViewFilterRule`, rules for `RuleTypeEnum.hasCustomFieldIn`, `doesNotHaveCustomFieldIn`, `hasCustomFields`, `doesNotHaveCustomField`, and `customFieldsQuery` hit `default:` and were dropped with a warning log, resulting in saved views with custom field filters being displayed unfiltered or failing to round-trip filter criteria.
+
+This PR adds:
+- `customFields` (`IdQueryParameter?`) and `customFieldQuery` (`String?`) fields to `DocumentFilter`, with full mapping in `toQueryParameters()`.
+- Parsing of custom field rules in `SavedViewFilterRuleExtension.applyToFilter` for rule types 36 to 42.
+- Conversion from `DocumentFilter` back to `SavedViewFilterRule` in `DocumentFilterExtension.toFilterRules()`.
+- Unit tests verifying serialization, query parameter generation, and round-tripping.
+
+Closes #686.
