@@ -54,6 +54,26 @@ class FileService {
     return _singleton!;
   }
 
+  @visibleForTesting
+  static set instance(FileService service) => _singleton = service;
+
+  @visibleForTesting
+  static FileService createForTesting({
+    Directory? temporaryDirectory,
+    Directory? downloadsDirectory,
+  }) {
+    final service = FileService._();
+    final tempDir = temporaryDirectory ?? Directory.systemTemp;
+    service._temporaryDirectory = tempDir;
+    service._downloadsDirectory = downloadsDirectory ?? tempDir;
+    service._documentsDirectory = tempDir;
+    service._logDirectory = tempDir;
+    service._uploadDirectory = tempDir;
+    service._temporaryScansDirectory = tempDir;
+    service._documentScansDirectory = tempDir;
+    return service;
+  }
+
   Future<File> saveToFile(Uint8List bytes, String filename) async {
     File file = File(p.join(_logDirectory.path, filename));
     logger.fd(

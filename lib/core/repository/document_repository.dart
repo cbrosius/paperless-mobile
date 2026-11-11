@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:cached_query_flutter/cached_query_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:mime/mime.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/document_extensions.dart';
 import 'package:paperless_mobile/core/repository/change_notifier_mixin.dart';
@@ -392,10 +393,16 @@ class DocumentRepository with ChangeNotifierMixin {
     final metadata = metadataResult.data!;
     final document = documentResult.data!;
 
-    final effectiveFilePath =
-        document.archivedFileName ??
-        document.originalFileName ??
-        metadata.mediaFilename;
+    final effectiveFilePath = original
+        ? (document.originalFileName ??
+              metadata.originalFilename ??
+              metadata.mediaFilename ??
+              document.archivedFileName ??
+              metadata.archiveMediaFilename)
+        : (document.archivedFileName ??
+              metadata.archiveMediaFilename ??
+              document.originalFileName ??
+              metadata.mediaFilename);
     if (effectiveFilePath == null) {
       logger.fe(
         'No valid filename found for document $documentId',
@@ -404,8 +411,31 @@ class DocumentRepository with ChangeNotifierMixin {
       );
       throw Exception('No valid filename found for document $documentId');
     }
-    final normalizedPath = effectiveFilePath.replaceAll("/", " ");
-    final extension = original ? p.extension(normalizedPath) : '.pdf';
-    return "${FileService.instance.getDirectory(type).path}/${p.basenameWithoutExtension(normalizedPath)}$extension";
+
+    final fileName = p.basename(effectiveFilePath.replaceAll(r'\', '/'));
+    var extension = original ? p.extension(fileName) : '.pdf';
+    var baseName = p.basenameWithoutExtension(fileName);
+
+    if (baseName.startsWith('.') && (extension.isEmpty || extension == '.pdf')) {
+      extension = baseName;
+      baseName = '';
+    }
+
+    if (original && extension.isEmpty && metadata.originalMimeType != null) {
+      final extFromMime = extensionFromMime(metadata.originalMimeType!);
+      if (extFromMime != null) {
+        extension = '.$extFromMime';
+      }
+    }
+    if (extension.isEmpty) {
+      extension = '.pdf';
+    }
+
+    final safeBaseName = baseName.isNotEmpty
+        ? baseName
+        : (document.title?.isNotEmpty ?? false
+            ? document.title!
+            : 'document_$documentId');
+    return "${FileService.instance.getDirectory(type).path}/$safeBaseName$extension";
   }
 }
