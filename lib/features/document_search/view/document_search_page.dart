@@ -16,6 +16,7 @@ import 'package:paperless_mobile/features/documents/view/widgets/adaptive_docume
 import 'package:paperless_mobile/features/documents/view/widgets/selection/view_type_selection_widget.dart';
 import 'package:paperless_mobile/features/settings/model/view_type.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
+import 'package:paperless_mobile/helpers/message_helpers.dart';
 
 enum SearchView { suggestions, results }
 
@@ -279,55 +280,101 @@ class _DocumentSearchPageState extends State<DocumentSearchPage> {
       ),
     );
 
-    final header = Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          S.of(context)!.results,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-        ViewTypeSelectionWidget(
-          viewType: _documentViewType,
-          onChanged: (type) {
-            setState(() {
-              _documentViewType = type;
-            });
-          },
-        ),
-      ],
-    ).paddedLTRB(16, 8, 8, 8);
-    return QueryBuilder(
-      query: resultListQuery,
-      builder: (context, state) {
-        final documents =
-            state.data?.pages.expand((e) => e.results).toList() ?? [];
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: header),
-            if (documents.isEmpty)
-              SliverToBoxAdapter(
-                child: Center(
-                  child: Text(S.of(context)!.noDocumentsFound),
-                ).paddedOnly(top: 8),
-              )
-            else ...[
-              SliverAdaptiveDocumentsView(
-                heroTagPrefix: DocumentSearchPage.heroPrefix,
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        final offset = notification.metrics.pixels;
+        final max = notification.metrics.maxScrollExtent;
+        final totalCount = resultListQuery.state.data?.firstPage?.count ?? 0;
+        final loadedCount =
+            resultListQuery.state.data?.pages.fold(
+              0,
+              (value, element) => value + element.results.length,
+            ) ??
+            0;
+        final isLastPageLoaded =
+            (resultListQuery.state.data?.lastPage?.next == null &&
+                loadedCount > 0) ||
+            loadedCount >= totalCount;
+
+        if (max == 0 || resultListQuery.state.isLoading || isLastPageLoaded) {
+          return false;
+        }
+
+        if (offset >= max * 0.7) {
+          resultListQuery.getNextPage().onError<PaperlessApiException>((
+            error,
+            stackTrace,
+          ) {
+            if (context.mounted) {
+              showErrorMessage(context, error, stackTrace);
+            }
+            return null;
+          });
+          return true;
+        }
+        return false;
+      },
+      child: QueryBuilder(
+        query: resultListQuery,
+        builder: (context, state) {
+          final documents =
+              state.data?.pages.expand((e) => e.results).toList() ?? [];
+          final totalCount = state.data?.firstPage?.count;
+          final header = Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                totalCount != null
+                    ? '${S.of(context)!.results} ($totalCount)'
+                    : S.of(context)!.results,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              ViewTypeSelectionWidget(
                 viewType: _documentViewType,
-                documents: documents,
-                isLabelClickable: false,
-                isLoading: state.isLoading,
-                hasLoaded: state.isSuccess,
-                disabledIds: widget.disabledIds,
-                onTap: (document) {
-                  widget.onItemSelected(context, document);
+                onChanged: (type) {
+                  setState(() {
+                    _documentViewType = type;
+                  });
                 },
               ),
-              SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
-          ],
-        );
-      },
+          ).paddedLTRB(16, 8, 8, 8);
+
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: header),
+              if (documents.isEmpty && !state.isLoading)
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Text(S.of(context)!.noDocumentsFound),
+                  ).paddedOnly(top: 8),
+                )
+              else ...[
+                SliverAdaptiveDocumentsView(
+                  heroTagPrefix: DocumentSearchPage.heroPrefix,
+                  viewType: _documentViewType,
+                  documents: documents,
+                  isLabelClickable: false,
+                  isLoading: state.isLoading && documents.isEmpty,
+                  hasLoaded: state.isSuccess,
+                  disabledIds: widget.disabledIds,
+                  onTap: (document) {
+                    widget.onItemSelected(context, document);
+                  },
+                ),
+                if (state.isLoading && documents.isNotEmpty)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+                const SliverToBoxAdapter(child: SizedBox(height: 80)),
+              ],
+            ],
+          );
+        },
+      ),
     );
   }
 
