@@ -220,21 +220,27 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
           );
         case RuleTypeEnum.ownerIs:
           return filter.copyWith(
-            owner: IdQueryParameter.single(id: int.parse(value!)),
+            owner: value == null || value == 'null'
+                ? const NotAssignedIdQueryParameter()
+                : IdQueryParameter.single(id: int.parse(value!)),
           );
         case RuleTypeEnum.hasOwnerIn:
           return filter.copyWith(
-            owner: IncludeIdsQueryParameter(
-              ids: value!.split(',').map(int.parse).toList(),
-            ),
+            owner: value == null || value!.isEmpty
+                ? const NotAssignedIdQueryParameter()
+                : IncludeIdsQueryParameter(
+                    ids: value!.split(',').map(int.parse).toList(),
+                  ),
           );
         case RuleTypeEnum.doesNotHaveOwner:
           return filter.copyWith(owner: const NotAssignedIdQueryParameter());
         case RuleTypeEnum.doesNotHaveOwnerIn:
           return filter.copyWith(
-            owner: IdQueryParameter.exclude(
-              ids: value!.split(',').map(int.parse).toList(),
-            ),
+            owner: value == null || value!.isEmpty
+                ? const IdQueryParameter.unset()
+                : IdQueryParameter.exclude(
+                    ids: value!.split(',').map(int.parse).toList(),
+                  ),
           );
         case RuleTypeEnum.createdTo:
           if (filter.created is AbsoluteDateRangeQuery) {
@@ -412,6 +418,30 @@ extension ToFilterRuleExtension on DocumentFilter {
 
     if (sPathRule != null) {
       filterRules.add(sPathRule);
+    }
+
+    final ownerRule = switch (owner) {
+      NotAssignedIdQueryParameter() => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.doesNotHaveOwner,
+        value: 'true',
+      ),
+      SingleIdQueryParameter(id: var id) => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.ownerIs,
+        value: id.toString(),
+      ),
+      IncludeIdsQueryParameter(ids: var ids) => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.hasOwnerIn,
+        value: ids.join(','),
+      ),
+      ExcludeIdsQueryParameter(ids: var ids) => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.doesNotHaveOwnerIn,
+        value: ids.join(','),
+      ),
+      _ => null,
+    };
+
+    if (ownerRule != null) {
+      filterRules.add(ownerRule);
     }
     final tagRules = switch (tags) {
       NotAssignedTagsQuery() => [

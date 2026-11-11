@@ -41,6 +41,7 @@ class DocumentFilterForm extends StatefulWidget {
           DocumentFilter.initial.query,
       created: (v[DocumentFilterForm.fkCreatedAt] as DateRangeQuery),
       added: (v[DocumentFilterForm.fkAddedAt] as DateRangeQuery),
+      owner: v['owner'] as IdQueryParameter? ?? initialFilter.owner,
       page: 1,
     );
   }

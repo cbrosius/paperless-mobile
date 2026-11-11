@@ -30,10 +30,12 @@ extension IdQueryParameterMethods on IdQueryParameter {
   }
 
   Map<String, String> toQueryParameter(String field) {
+    final notAssignedValue = field == 'owner' ? 'true' : '1';
+    final anyAssignedValue = field == 'owner' ? 'false' : '0';
     return when(
       unset: () => {},
-      notAssigned: () => {'${field}__isnull': '1'},
-      anyAssigned: () => {'${field}__isnull': '0'},
+      notAssigned: () => {'${field}__isnull': notAssignedValue},
+      anyAssigned: () => {'${field}__isnull': anyAssignedValue},
       include: (ids) => {'${field}__id__in': ids.join(',')},
       exclude: (ids) => {'${field}__id__none': ids.join(',')},
       single: (id) => {'${field}__id': id.toString()},
