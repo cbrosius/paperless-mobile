@@ -1,0 +1,40 @@
+# Description
+Fixes #407
+Fixes #482
+Fixes #483
+
+### Root Cause
+1. **Android IME InputType Classification:**
+   On Android, software keyboards (IMEs) such as Gboard, Samsung Keyboard, and SwiftKey inspect native `EditorInfo.inputType` flags configured by the application. When a single-line Flutter text field (`FormBuilderTextField` / `TextField`) does not specify `textCapitalization` (defaulting to `TextCapitalization.none`), Flutter transmits raw `InputType.TYPE_CLASS_TEXT` without any capitalization flags (`TYPE_TEXT_FLAG_CAP_SENTENCES` / `CAP_WORDS`) or multi-line flags.
+2. **Suppression of Word Suggestions, Autocorrect, and Glide/Swipe Typing:**
+   Android IMEs treat plain uncapitalized single-line text inputs as technical identifiers, slugs, usernames, or password-adjacent fields where automatic text alteration could corrupt input. Consequently, Gboard and other keyboards proactively suppress word prediction candidates in the suggestion strip, disable glide/swipe typing, turn off autocorrect, and cause CJK input methods to enter a restricted/password-like layout without candidate conversion strips.
+3. **Widespread Lack of Explicit Flags Across Entity Forms:**
+   This affected:
+   - Document title fields in `DocumentEditPage` and `DocumentUploadPreparationPage`
+   - The entity name field in `LabelForm` (`Label.nameKey` used for creating and editing correspondents, document types, tags, and storage paths)
+   - Custom field name input fields in `AddCustomFieldPage` and `EditCustomFieldPage`
+   - Saved view name input fields in `AddSavedViewPage` and `EditSavedViewPage`
+   - Custom field string values in `StringFormField`
+   - Document notes in `DocumentNotesWidget`
+   - Error report descriptions in `ErrorReportPage`
+
+### Solution
+1. **Explicit Enablement of Suggestions, Autocorrect, and Capitalization:**
+   Configured all human-readable text input fields across the app with:
+   - `keyboardType: TextInputType.text` (or `TextInputType.multiline` for multi-line inputs)
+   - `autocorrect: true`
+   - `enableSuggestions: true`
+   - `textCapitalization: TextCapitalization.sentences`
+2. **Restoring Full Keyboard Functionality on Android:**
+   Passing `TextCapitalization.sentences` adds `InputType.TYPE_TEXT_FLAG_CAP_SENTENCES` to the underlying platform input connection. This signals to Android keyboards that the field is natural human language, fully restoring:
+   - The word suggestions / prediction strip
+   - Glide / swipe typing
+   - Automatic spell checking and correction
+   - Normal CJK input candidate selection
+   - Automatic first-letter sentence capitalization
+
+### Verification
+- **Widget Tests:** Added `test/src/features/keyboard_suggestions_test.dart` verifying that `StringFormField`, single-line text fields, and multi-line fields properly configure `autocorrect: true`, `enableSuggestions: true`, `textCapitalization: TextCapitalization.sentences`, and the expected `keyboardType`. All 3 tests passed.
+- **Regression Tests:** Ran `test/src/widget_test.dart` (all tests passed).
+- **Static Analysis:** `fvm flutter analyze` reports 0 errors and 0 warnings across all 11 modified and new files.
+- **Formatting:** Formatted all Dart code with `fvm dart format`.
