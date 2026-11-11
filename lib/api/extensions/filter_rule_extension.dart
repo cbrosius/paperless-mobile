@@ -28,15 +28,19 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
           );
         case RuleTypeEnum.correspondentIs:
           return filter.copyWith(
-            correspondent: value == null
+            correspondent: value == null || value == 'null'
                 ? const NotAssignedIdQueryParameter()
-                : IncludeIdsQueryParameter(ids: [int.parse(value!)]),
+                : value == '-1'
+                ? const AnyAssignedIdQueryParameter()
+                : SingleIdQueryParameter(id: int.parse(value!)),
           );
         case RuleTypeEnum.storagePathIs:
           return filter.copyWith(
-            storagePath: value == null
+            storagePath: value == null || value == 'null'
                 ? const NotAssignedIdQueryParameter()
-                : IncludeIdsQueryParameter(ids: [int.parse(value!)]),
+                : value == '-1'
+                ? const AnyAssignedIdQueryParameter()
+                : SingleIdQueryParameter(id: int.parse(value!)),
           );
         case RuleTypeEnum.hasAnyTag:
           return filter.copyWith(
@@ -208,15 +212,25 @@ extension FilterRuleToDocumentFilterExtension on SavedViewFilterRule {
           );
         case RuleTypeEnum.hasStoragePathIn:
           return filter.copyWith(
-            storagePath: IdQueryParameter.include(
-              ids: value!.split(',').map(int.parse).toList(),
-            ),
+            storagePath: value == null || value!.isEmpty
+                ? const NotAssignedIdQueryParameter()
+                : IdQueryParameter.include(
+                    ids: value!
+                        .split(',')
+                        .map((e) => int.parse(e.trim()))
+                        .toList(),
+                  ),
           );
         case RuleTypeEnum.doesNotHaveStoragePathIn:
           return filter.copyWith(
-            storagePath: IdQueryParameter.exclude(
-              ids: value!.split(',').map(int.parse).toList(),
-            ),
+            storagePath: value == null || value!.isEmpty
+                ? const IdQueryParameter.unset()
+                : IdQueryParameter.exclude(
+                    ids: value!
+                        .split(',')
+                        .map((e) => int.parse(e.trim()))
+                        .toList(),
+                  ),
           );
         case RuleTypeEnum.ownerIs:
           return filter.copyWith(
@@ -348,9 +362,13 @@ extension ToFilterRuleExtension on DocumentFilter {
         ruleType: RuleTypeEnum.correspondentIs,
         value: null,
       ),
+      SingleIdQueryParameter(id: var id) => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.correspondentIs,
+        value: id.toString(),
+      ),
       IncludeIdsQueryParameter(ids: var ids) => SavedViewFilterRule(
         ruleType: RuleTypeEnum.hasCorrespondentIn,
-        value: ids.toString(),
+        value: ids.join(','),
       ),
       AnyAssignedIdQueryParameter() => SavedViewFilterRule(
         ruleType: RuleTypeEnum.correspondentIs,
@@ -370,6 +388,10 @@ extension ToFilterRuleExtension on DocumentFilter {
       NotAssignedIdQueryParameter() => SavedViewFilterRule(
         ruleType: RuleTypeEnum.documentTypeIs,
         value: null,
+      ),
+      SingleIdQueryParameter(id: var id) => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.documentTypeIs,
+        value: id.toString(),
       ),
       IncludeIdsQueryParameter(ids: var ids) => SavedViewFilterRule(
         ruleType: RuleTypeEnum.hasDocumentTypeIn,
@@ -394,6 +416,10 @@ extension ToFilterRuleExtension on DocumentFilter {
       NotAssignedIdQueryParameter() => SavedViewFilterRule(
         ruleType: RuleTypeEnum.storagePathIs,
         value: null,
+      ),
+      SingleIdQueryParameter(id: var id) => SavedViewFilterRule(
+        ruleType: RuleTypeEnum.storagePathIs,
+        value: id.toString(),
       ),
       IncludeIdsQueryParameter(ids: var ids) => SavedViewFilterRule(
         ruleType: RuleTypeEnum.hasStoragePathIn,
