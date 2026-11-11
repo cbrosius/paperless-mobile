@@ -1,0 +1,14 @@
+# PR: Support modern 'text' query parameter for Title & Content search on Paperless-ngx 3.x (#685)
+
+## Summary
+In Paperless-ngx 3.0+, full-text search was migrated to Tantivy and the legacy `title_content` query parameter was deprecated in favor of `text` (for simple title & content search) and `query` (for full-text / advanced search).
+
+When users performed text searches in the app or selected suggestions from autocomplete, Paperless Mobile generated `title_content=<query>` (under default UI settings `search.moreLink: titleContent`). In Paperless-ngx 3.1+, `title_content` bypassed Tantivy and fell back to SQL database containment on `effective_content`, which failed to match indexed document contents and returned 0 results.
+
+This PR:
+- Updates `TextQuery.toQueryParameter([int? apiVersion])` to use modern `text` for Paperless-ngx 3.x (`apiVersion >= 8` or default), preserving legacy `title_content` only for older servers (`apiVersion < 8`).
+- Passes `apiVersion` through `DocumentFilter.toQueryParameters(apiVersion)`.
+- Injects `apiVersion` into `PaperlessDocumentsApiImpl` from the logged-in user account.
+- Adds comprehensive unit tests in `text_search_test.dart` for version-aware text search query parameter generation.
+
+Closes #685.
