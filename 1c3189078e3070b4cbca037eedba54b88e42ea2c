@@ -1,0 +1,21 @@
+# Pull Request: Apply custom field and selection filter logic in saved views (#641)
+
+## Summary
+Resolves #641.
+Fixes an issue where saved views created in Paperless-ngx with custom field criteria (such as Selection fields e.g. `Status = "unpaid"`) did not apply the filter in Paperless Mobile, causing all documents to be displayed.
+
+## Root Cause
+1. `SavedViewFilterRule.applyToFilter` did not handle `RuleTypeEnum.customFieldsQuery` (rule 42) or `RuleTypeEnum.hasCustomFieldValue` (rule 36), falling back to `default:` and ignoring the rules.
+2. `DocumentFilter` lacked support for `customFieldQuery` and did not map it to the `/api/documents/?custom_field_query=...` query parameter.
+3. `DocumentFilter.toFilterRules()` did not serialize `customFieldQuery` back to a `SavedViewFilterRule`.
+
+## Changes
+- **`DocumentFilter`**: Added `String? customFieldQuery`, added query parameter mapping `custom_field_query` in `toQueryParameters()`, and counted in `appliedFiltersCount`.
+- **`filter_rule_extension.dart`**:
+  - In `applyToFilter`: Handled `RuleTypeEnum.customFieldsQuery` (42) and `RuleTypeEnum.hasCustomFieldValue` (36) by updating `filter.customFieldQuery` (and combining multiple criteria with `["AND", [q1, q2]]` if needed).
+  - In `toFilterRules()`: Added round-trip serialization of `customFieldQuery` into `SavedViewFilterRule(ruleType: RuleTypeEnum.customFieldsQuery, value: customFieldQuery)`.
+- **Tests**: Added comprehensive unit tests in `test/src/features/custom_fields/saved_view_selection_filter_test.dart`.
+
+## Verification
+- `fvm flutter test test/src/features/custom_fields/saved_view_selection_filter_test.dart` (5 passed)
+- Code formatted with `fvm dart format` and verified against user formatting rules.
