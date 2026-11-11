@@ -1,0 +1,14 @@
+# PR: Enable Infinite Scroll Pagination in Document Search Page (#683)
+
+## Summary
+When searching for documents in `DocumentSearchPage`, results were capped at the initial page size (25 items) because `CustomScrollView` was rendered without a scroll listener to trigger `getNextPage()`. Users were unable to view further search results even when 50+ documents matched on the server.
+
+This PR:
+- Wraps the search result list in a `NotificationListener<ScrollNotification>` to listen for scroll events.
+- Evaluates when the user reaches 70% scroll depth and checks whether further pages exist (`lastPage.next != null` and `loadedCount < totalCount`).
+- Calls `resultListQuery.getNextPage()` asynchronously with graceful error handling via `showErrorMessage`.
+- Displays total matching document count in the results header (`Results (59)`).
+- Renders a bottom progress indicator when fetching subsequent pages.
+- Adds unit tests in `search_pagination_test.dart` verifying multi-page search pagination.
+
+Closes #683.
