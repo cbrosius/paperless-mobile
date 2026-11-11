@@ -98,6 +98,7 @@ class _CustomFieldValue extends StatelessWidget {
       ),
       DataTypeEnum.monetary => MonetaryFieldValue(
         value: value,
+        extraData: extraData,
         style: textStyle,
         placeholder: placeholder,
       ),
