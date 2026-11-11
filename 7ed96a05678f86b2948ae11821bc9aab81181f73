@@ -1,0 +1,46 @@
+# Description
+Fixes #700
+Fixes #458
+
+### Root Cause
+1. **Archived File Name Prioritized Over Original (#700):**
+   In `DocumentRepository.generateLocalFilePath`, the effective file path was determined using:
+   ```dart
+   final effectiveFilePath =
+       document.archivedFileName ??
+       document.originalFileName ??
+       metadata.mediaFilename;
+   ...
+   final extension = original ? p.extension(normalizedPath) : '.pdf';
+   ```
+   For any image document (e.g. JPEG or PNG) where Paperless-ngx generated an OCR archive version, `document.archivedFileName` is populated with a `.pdf` file name. When downloading or opening the **original** (`original == true`), `effectiveFilePath` was incorrectly chosen from `archivedFileName` (`*.pdf`), resulting in `.pdf` as the extension. As a consequence, original image bytes were saved under a `.pdf` file name, causing PDF viewers to fail and preventing gallery/image apps from opening the file.
+2. **Directory Structure Leaked into Downloaded File Names (#458):**
+   When `metadata.mediaFilename` or `metadata.archiveMediaFilename` was selected, server storage paths like `documents/2024/invoices/invoice_08.pdf` were processed with `effectiveFilePath.replaceAll("/", " ")`, turning directory separators into spaces and producing awkward filenames like `documents 2024 invoices invoice_08.pdf` rather than extracting the true file basename `invoice_08.pdf`.
+3. **Hardcoded PDF MIME Type in Document Sharing:**
+   In `DocumentShareCubit.shareDocument`, `XFile` was instantiated with `mimeType: "application/pdf"` unconditionally, even when sharing original images.
+
+### Solution
+1. **Context-Aware File Resolution:**
+   In `DocumentRepository.generateLocalFilePath`:
+   - When `original == true`, prefer `document.originalFileName`, `metadata.originalFilename`, and `metadata.mediaFilename` over archived file names.
+   - When `original == false`, prefer `document.archivedFileName` and `metadata.archiveMediaFilename`.
+2. **Robust Extension & MIME Fallbacks:**
+   - For `original == true`, extract the extension from the resolved file name. If the file name lacks an extension, look up the extension from `metadata.originalMimeType` using `extensionFromMime`.
+   - For `original == false`, ensure the extension is `.pdf`.
+3. **Directory Path Stripping (#458):**
+   - Extract the file name using `p.basename(effectiveFilePath.replaceAll(r'\', '/'))`, cleanly discarding any server directory prefixes.
+4. **Dynamic Sharing MIME Type & Name:**
+   - In `DocumentShareCubit`, set `name: p.basename(filePath)` and dynamically detect `mimeType` using `lookupMimeType(filePath)` when sharing original documents.
+5. **VisibleForTesting FileService:**
+   - Added `FileService.createForTesting` to allow headless unit testing of file operations across platforms without requiring platform-specific storage directories.
+
+### Verification
+- **Unit Tests:** Created `test/src/core/repository/document_file_path_test.dart` (5 tests passing):
+  - Preserving `.jpg` extension for original image downloads when an archive PDF exists
+  - Preserving `.png` extension for original image downloads when an archive PDF exists
+  - Resolving extension from `originalMimeType` when the file name has no extension
+  - Stripping server directory prefixes without leaking into the file name (#458)
+  - Falling back to document title when file name is empty
+- **Regression Tests:** `test/src/widget_test.dart` passed.
+- **Static Analysis:** `fvm flutter analyze` passed with 0 errors and 0 warnings.
+- **Formatting:** Formatted with `fvm dart format`.
