@@ -77,6 +77,10 @@ class _DocumentNotesWidgetState extends State<DocumentNotesWidget> {
                     TextFormField(
                       controller: _noteContentController,
                       maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      autocorrect: true,
+                      enableSuggestions: true,
+                      textCapitalization: TextCapitalization.sentences,
                       validator: (value) {
                         if (value?.trim().isEmpty ?? true) {
                           return S.of(context)!.thisFieldIsRequired;

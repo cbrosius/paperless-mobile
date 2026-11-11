@@ -479,6 +479,9 @@ class _DocumentEditPageState extends State<DocumentEditPage>
     return FormBuilderTextField(
       name: fkTitle,
       keyboardType: TextInputType.text,
+      autocorrect: true,
+      enableSuggestions: true,
+      textCapitalization: TextCapitalization.sentences,
       decoration: InputDecoration(
         label: Text(S.of(context)!.title),
         suffixIcon: IconButton(

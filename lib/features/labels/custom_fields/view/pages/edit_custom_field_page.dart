@@ -173,6 +173,10 @@ class _CustomFieldEditFormState extends State<_CustomFieldEditForm> {
             FormBuilderTextField(
               autofocus: false,
               name: 'name',
+              keyboardType: TextInputType.text,
+              autocorrect: true,
+              enableSuggestions: true,
+              textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: S.of(context)!.customFieldName,
                 errorText: _errors['name'],

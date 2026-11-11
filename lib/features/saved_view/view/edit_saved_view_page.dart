@@ -42,6 +42,10 @@ class _EditSavedViewPageState extends State<EditSavedViewPage> {
                   FormBuilderTextField(
                     initialValue: widget.savedView.name,
                     name: _fkName,
+                    keyboardType: TextInputType.text,
+                    autocorrect: true,
+                    enableSuggestions: true,
+                    textCapitalization: TextCapitalization.sentences,
                     validator: (value) {
                       if (value?.trim().isEmpty ?? true) {
                         return S.of(context)!.thisFieldIsRequired;

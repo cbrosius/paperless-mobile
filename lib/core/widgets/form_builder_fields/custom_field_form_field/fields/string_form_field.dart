@@ -60,6 +60,10 @@ class _StringFormFieldState extends State<StringFormField> {
     return TextField(
       controller: _controller,
       enabled: widget.enabled,
+      keyboardType: TextInputType.text,
+      autocorrect: true,
+      enableSuggestions: true,
+      textCapitalization: TextCapitalization.sentences,
       decoration: InputDecoration(
         prefixIcon: Icon(getCustomFieldIcon(DataTypeEnum.string)),
         labelText: widget.labelText,

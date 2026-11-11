@@ -180,6 +180,10 @@ class _DocumentUploadPreparationPageState
                         FormBuilderTextField(
                           autovalidateMode: AutovalidateMode.always,
                           name: 'title',
+                          keyboardType: TextInputType.text,
+                          autocorrect: true,
+                          enableSuggestions: true,
+                          textCapitalization: TextCapitalization.sentences,
                           initialValue:
                               widget.title ??
                               "scan_${fileNameDateFormat.format(_now)}",

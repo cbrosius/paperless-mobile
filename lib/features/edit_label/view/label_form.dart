@@ -102,6 +102,10 @@ class _LabelFormState<T extends Label, TRequest extends LabelRequest>
             FormBuilderTextField(
               autofocus: widget.autofocusNameField,
               name: Label.nameKey,
+              keyboardType: TextInputType.text,
+              autocorrect: true,
+              enableSuggestions: true,
+              textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: S.of(context)!.name,
                 errorText: _errors[Label.nameKey],

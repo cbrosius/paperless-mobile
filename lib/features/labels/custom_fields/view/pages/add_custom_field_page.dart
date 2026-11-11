@@ -80,6 +80,10 @@ class _CustomFieldFormState extends State<_CustomFieldForm> {
             FormBuilderTextField(
               autofocus: widget.initialName == null,
               name: 'name',
+              keyboardType: TextInputType.text,
+              autocorrect: true,
+              enableSuggestions: true,
+              textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: S.of(context)!.customFieldName,
                 errorText: _errors['name'],

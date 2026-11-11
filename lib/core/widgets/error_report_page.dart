@@ -47,6 +47,10 @@ Note: If you have the GitHub Android app installed, the descriptions will not be
             ).padded(),
             FormBuilderTextField(
               name: shortDescriptionKey,
+              keyboardType: TextInputType.text,
+              autocorrect: true,
+              enableSuggestions: true,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 label: Text('Short Description'),
                 hintText:
@@ -57,6 +61,9 @@ Note: If you have the GitHub Android app installed, the descriptions will not be
               name: shortDescriptionKey,
               maxLines: null,
               keyboardType: TextInputType.multiline,
+              autocorrect: true,
+              enableSuggestions: true,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 label: Text('Detailled Description'),
                 hintText:
