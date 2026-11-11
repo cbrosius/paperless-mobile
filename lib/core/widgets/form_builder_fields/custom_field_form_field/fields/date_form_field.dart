@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:paperless_mobile/api/constants/api_date_format.dart';
 import 'package:paperless_mobile/core/extensions/context_extensions.dart';
 
@@ -23,15 +24,43 @@ class DateFormField extends StatelessWidget {
 
   DateTime? _parseDate() {
     if (value == null) return null;
-    return DateTime.tryParse('$value');
+    if (value is DateTime) return value as DateTime;
+    final str = '$value'.trim();
+    if (str.isEmpty) return null;
+    final parsed = DateTime.tryParse(str);
+    if (parsed != null) return parsed;
+    try {
+      return DateFormat('dd.MM.yyyy').parse(str);
+    } catch (_) {}
+    try {
+      return DateFormat('yyyy/MM/dd').parse(str);
+    } catch (_) {}
+    try {
+      return DateFormat('MM/dd/yyyy').parse(str);
+    } catch (_) {}
+    final ts = int.tryParse(str);
+    if (ts != null) {
+      if (ts > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(ts);
+      } else if (ts > 1000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+      }
+    }
+    return null;
+  }
+
+  String _formatDate(BuildContext context, DateTime date) {
+    try {
+      return context.displayDateFormat.format(date);
+    } catch (_) {
+      return apiDateFormat.format(date);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final date = _parseDate();
-    final displayText = date != null
-        ? context.displayDateFormat.format(date)
-        : '';
+    final displayText = date != null ? _formatDate(context, date) : '';
 
     return InkWell(
       borderRadius: BorderRadius.all(Radius.circular(16)),

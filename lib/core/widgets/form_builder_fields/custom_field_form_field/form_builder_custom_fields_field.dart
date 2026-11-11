@@ -27,19 +27,18 @@ class FormBuilderCustomFieldsField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return QueryBuilder(
-      query: context.customFieldRepository.getAllQuery(),
-      builder: (context, customFieldsState) {
-        final allCustomFields = customFieldsState.data;
-        if (allCustomFields == null) {
-          return const SizedBox.shrink();
-        }
-        final customFieldMap = {for (final cf in allCustomFields) cf.id: cf};
-
-        return FormBuilderField<List<CustomFieldInstance>>(
-          name: name,
-          initialValue: initialValue,
-          builder: (field) {
+    return FormBuilderField<List<CustomFieldInstance>>(
+      name: name,
+      initialValue: initialValue,
+      builder: (field) {
+        return QueryBuilder(
+          query: context.customFieldRepository.getAllQuery(),
+          builder: (context, customFieldsState) {
+            final allCustomFields = customFieldsState.data;
+            if (allCustomFields == null) {
+              return const SizedBox.shrink();
+            }
+            final customFieldMap = {for (final cf in allCustomFields) cf.id: cf};
             final instances = field.value ?? [];
 
             return Column(

@@ -28,8 +28,11 @@ class SelectFieldValue extends StatelessWidget {
       final options = extraData['select_options'];
       if (options is List) {
         for (final option in options) {
-          if (option is Map && option['id'] == id) {
-            return option['label']?.toString();
+          if (option is Map) {
+            final optId = option['id'] ?? option['value'];
+            if (optId == id || '$optId' == '$id') {
+              return option['label']?.toString();
+            }
           }
         }
       }

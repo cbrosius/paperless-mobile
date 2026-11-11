@@ -32,7 +32,10 @@ class SelectFormField extends StatelessWidget {
     if (extraData is Map) {
       final options = (extraData as Map)['select_options'];
       if (options is List) {
-        return options.whereType<Map<String, dynamic>>().toList();
+        return options
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
     }
     return [];
@@ -54,10 +57,13 @@ class SelectFormField extends StatelessWidget {
         // Allow clearing the selection.
         const DropdownMenuItem<Object?>(value: null, child: Text('-')),
         ...options.map(
-          (option) => DropdownMenuItem<Object?>(
-            value: option['id'],
-            child: Text('${option['label']}'),
-          ),
+          (option) {
+            final optId = option['id'] ?? option['value'];
+            return DropdownMenuItem<Object?>(
+              value: optId,
+              child: Text('${option['label'] ?? optId}'),
+            );
+          },
         ),
       ],
     );
@@ -65,11 +71,12 @@ class SelectFormField extends StatelessWidget {
 
   /// Finds the matching option value, accounting for type differences
   /// (e.g. the value may be stored as an int or string).
-  Object? _findMatchingValue(List<dynamic> options) {
+  Object? _findMatchingValue(List<Map<String, dynamic>> options) {
     if (value == null) return null;
     for (final option in options) {
-      if (option == value || '$option' == '$value') {
-        return option;
+      final optId = option['id'] ?? option['value'];
+      if (optId == value || '$optId' == '$value') {
+        return optId;
       }
     }
     return null;
