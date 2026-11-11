@@ -50,7 +50,7 @@ abstract class DocumentFilter with _$DocumentFilter {
         modified is RelativeDateRangeQuery;
   }
 
-  Map<String, dynamic> toQueryParameters() {
+  Map<String, dynamic> toQueryParameters([int? apiVersion]) {
     List<MapEntry<String, dynamic>> params = [
       MapEntry('page', page),
       MapEntry('page_size', pageSize),
@@ -65,7 +65,7 @@ abstract class DocumentFilter with _$DocumentFilter {
       ...created.toQueryParameter(DateRangeQueryField.created).entries,
       ...modified.toQueryParameter(DateRangeQueryField.modified).entries,
       ...owner.toQueryParameter('owner').entries,
-      ...query.toQueryParameter().entries,
+      ...query.toQueryParameter(apiVersion).entries,
       if (sortField != null)
         MapEntry('ordering', '${sortOrder.queryString}${sortField!.value}'),
       if (moreLike != null) MapEntry('more_like_id', moreLike),

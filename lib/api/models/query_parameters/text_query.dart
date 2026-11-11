@@ -17,10 +17,18 @@ class TextQuery {
     : queryType = QueryType.titleAndContent;
   const TextQuery.extended(this.queryText) : queryType = QueryType.extended;
 
-  Map<String, String> toQueryParameter() {
+  Map<String, String> toQueryParameter([int? apiVersion]) {
     final params = <String, String>{};
     if (queryText != null && queryText!.isNotEmpty) {
-      params.addAll({queryType.queryParam: queryText!});
+      if (queryType == QueryType.titleAndContent) {
+        // Paperless-ngx 3.0+ (API version >= 8) replaced deprecated `title_content` with `text`.
+        final param = (apiVersion != null && apiVersion < 8)
+            ? 'title_content'
+            : 'text';
+        params[param] = queryText!;
+      } else {
+        params[queryType.queryParam] = queryText!;
+      }
     }
     return params;
   }

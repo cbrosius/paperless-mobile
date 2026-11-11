@@ -44,6 +44,7 @@ class HomeShellWidget extends StatelessWidget {
     final localStoreState = context.watch<LocalStore>().state;
     final currentUserId = localStoreState.loggedInAppUserId;
     final client = context.read<SessionManager>().client;
+    final apiVersion = localStoreState.users[currentUserId]?.account.apiVersion;
 
     return MultiProvider(
       key: ValueKey(currentUserId),
@@ -58,7 +59,8 @@ class HomeShellWidget extends StatelessWidget {
           ),
         ),
         Provider<PaperlessDocumentsApi>(
-          create: (context) => PaperlessDocumentsApiImpl(client),
+          create: (context) =>
+              PaperlessDocumentsApiImpl(client, apiVersion: apiVersion),
         ),
         Provider<PaperlessSearchApi>(
           create: (context) => PaperlessSearchApiImpl(client),

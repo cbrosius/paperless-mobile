@@ -57,8 +57,9 @@ abstract class PaperlessDocumentsApi {
 
 class PaperlessDocumentsApiImpl implements PaperlessDocumentsApi {
   final Dio client;
+  final int? apiVersion;
 
-  PaperlessDocumentsApiImpl(this.client);
+  PaperlessDocumentsApiImpl(this.client, {this.apiVersion});
 
   @override
   Future<String> create(
@@ -150,7 +151,7 @@ class PaperlessDocumentsApiImpl implements PaperlessDocumentsApi {
   Future<PaginatedResultList<Document>> getAll([
     DocumentFilter? options,
   ]) async {
-    final filterParams = options?.toQueryParameters() ?? {}
+    final filterParams = options?.toQueryParameters(apiVersion) ?? {}
       ..putIfAbsent('truncate_content', () => "true");
     try {
       final response = await client.get(
