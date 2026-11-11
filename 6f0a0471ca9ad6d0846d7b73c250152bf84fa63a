@@ -1,0 +1,13 @@
+# PR: Fix Filter Rule 'has storage path in' (Rule 30) and Single ID Serialization (#304)
+
+## Summary
+When users created saved views in the Paperless-ngx web UI filtering by storage path (which generates rule 30 `hasStoragePathIn`), Paperless Mobile displayed all documents unfiltered. In addition, when saved views were created or round-tripped with single IDs for `storagePath`, `documentType`, or `correspondent`, `toFilterRules()` evaluated to `_ => null` and dropped the rules completely.
+
+This PR:
+- Robustly handles rule 30 `hasStoragePathIn` and rule 31 `doesNotHaveStoragePathIn` in `applyToFilter` with whitespace trimming and null safety.
+- Fixes `storagePathIs` (25) to map `-1` to `AnyAssignedIdQueryParameter()`.
+- Adds `SingleIdQueryParameter` mapping to `toFilterRules()` for `storagePath`, `documentType`, and `correspondent`.
+- Fixes `ids.toString()` bug in `hasCorrespondentIn` serialization to use `ids.join(',')`.
+- Adds unit tests in `storage_path_filter_test.dart` verifying rule parsing, serialization, and query parameter generation.
+
+Closes #304.
