@@ -13,4 +13,13 @@ Because `appUserId` (often containing format `user@https://host:port`) was passe
 - Updated `DocumentPreview` to display a themed document icon placeholder in `errorWidget` and log decoding/network failures via `errorListener`.
 - Added unit tests in `test/src/features/home/sanitize_cache_key_test.dart`.
 
+## Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-675-before.png) | ![After](.git/screenshots/issue-675-after.png) |
+
+## Verification
+- Unit test: `test/src/features/home/sanitize_cache_key_test.dart` passes cleanly
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
+
 Fixes #675
