@@ -304,7 +304,7 @@ class _InboxItemState extends State<InboxItem> {
                     state.data!.tags.isNotEmpty ||
                     state.data!.storagePaths.isNotEmpty ||
                     state.data!.dates.isNotEmpty;
-                if (hasSuggestions) {
+                if (!hasSuggestions) {
                   showSnackBar(
                     context,
                     S.of(context)!.noSuggestionsForThisDocument,
@@ -396,8 +396,8 @@ class _InboxItemState extends State<InboxItem> {
       ),
       enabled: _suggestionsEnabled,
       builder: (context, state) {
-        if (state.isInitial || state.isLoadingInitial) {
-          return SliverToBoxAdapter(child: SizedBox.shrink());
+        if (state.isInitial || state.isLoadingInitial || state.data == null) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
         }
         if (state.isError) {
           return SliverToBoxAdapter(
