@@ -32,6 +32,12 @@ class DocumentPreview extends StatelessWidget {
     this.mimeType,
   });
 
+  /// Constructs a cache key isolated per user/account to avoid collisions
+  /// when multiple accounts have documents with the same ID (#656).
+  static String buildCacheKey({String? userId, required int documentId}) {
+    return userId != null ? '${userId}_thumb_$documentId' : 'thumb_$documentId';
+  }
+
   @override
   Widget build(BuildContext context) {
     return ConnectivityAwareActionWrapper(
@@ -67,7 +73,10 @@ class DocumentPreview extends StatelessWidget {
         child: CachedNetworkImage(
           fit: fit,
           alignment: alignment,
-          cacheKey: "thumb_$documentId",
+          cacheKey: buildCacheKey(
+            userId: context.loggedInAppUserId,
+            documentId: documentId,
+          ),
 
           imageUrl: context.uiSettings$.canViewDocuments
               ? context.read<PaperlessDocumentsApi>().getThumbnailUrl(
