@@ -38,6 +38,7 @@ class _EventListenerShellState extends State<EventListenerShell> {
   StreamSubscription? _subscription;
   StreamSubscription? _documentDeletedSubscription;
   Timer? _inboxTimer;
+  final Set<String> _processedFilePaths = <String>{};
 
   @override
   void initState() {
@@ -117,11 +118,33 @@ class _EventListenerShellState extends State<EventListenerShell> {
   }
 
   void _onReceiveSharedFiles(List<SharedMediaFile> sharedFiles) async {
-    final files = sharedFiles.map((file) => File(file.path)).toList();
+    final uniqueFiles = sharedFiles.where((file) {
+      if (_processedFilePaths.contains(file.path)) {
+        return false;
+      }
+      _processedFilePaths.add(file.path);
+      return true;
+    }).toList();
+
+    if (uniqueFiles.isEmpty) {
+      return;
+    }
+
+    // Reset intent cache so Android/plugin does not re-emit on app resumes (#624).
+    ReceiveSharingIntent.instance.reset();
+
+    // Allow re-sharing after 10-second cooldown.
+    Future.delayed(const Duration(seconds: 10), () {
+      for (final file in uniqueFiles) {
+        _processedFilePaths.remove(file.path);
+      }
+    });
+
+    final files = uniqueFiles.map((file) => File(file.path)).toList();
     final userId = context.loggedInAppUserId!;
     if (files.isNotEmpty) {
       logger.fi(
-        'Received shared files: \n\t${sharedFiles.map((e) => e.path).join(',\n\t')}',
+        'Received shared files: \n\t${uniqueFiles.map((e) => e.path).join(',\n\t')}',
         className: runtimeType.toString(),
         methodName: '_onReceiveSharedFiles',
       );
