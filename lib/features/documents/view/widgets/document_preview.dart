@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/extensions/context_extensions.dart';
+import 'package:paperless_mobile/features/logging/data/logger.dart';
 import 'package:paperless_mobile/helpers/connectivity_aware_action_wrapper.dart';
 import 'package:paperless_mobile/routing/routes/documents_route.dart';
 import 'package:provider/provider.dart';
@@ -74,7 +75,21 @@ class DocumentPreview extends StatelessWidget {
                   documentId,
                 )
               : '',
-          errorWidget: (ctxt, msg, _) => SizedBox.shrink(),
+          errorListener: (e) {
+            logger.fw(
+              'Failed to load thumbnail for document $documentId: $e',
+              className: 'DocumentPreview',
+            );
+          },
+          errorWidget: (ctxt, msg, _) => Container(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Center(
+              child: Icon(
+                Icons.description_outlined,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
           placeholder: (context, value) => Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,

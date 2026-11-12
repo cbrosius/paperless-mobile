@@ -33,6 +33,10 @@ class HomeShellWidget extends StatelessWidget {
 
   final Widget child;
 
+  static String sanitizeCacheKey(String rawKey) {
+    return rawKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+  }
+
   const HomeShellWidget({
     super.key,
     required this.appUserId,
@@ -51,8 +55,8 @@ class HomeShellWidget extends StatelessWidget {
         Provider(
           create: (context) => CacheManager(
             Config(
-              // Isolated cache per user.
-              appUserId,
+              // Isolated cache per user sanitized for filesystem paths (#675).
+              sanitizeCacheKey(appUserId),
               fileService: DioFileService(client),
             ),
           ),
