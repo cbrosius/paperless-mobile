@@ -10,4 +10,13 @@ In issue #688, users noted that text annotations and markup added to PDFs via Sh
 - Explicitly set `annotationRenderingMode: PdfAnnotationRenderingMode.annotationAndForms` on `PdfViewerParams` in `PdfDocumentViewer`.
 - Added a widget test in `test/src/features/documents/view/pages/viewers/pdf_document_viewer_test.dart` verifying the annotation rendering mode is properly configured.
 
+## Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-688-before.png) | ![After](.git/screenshots/issue-688-after.png) |
+
+## Verification
+- Widget test: `test/src/features/documents/view/pages/viewers/pdf_document_viewer_test.dart`
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
+
 Fixes #688
