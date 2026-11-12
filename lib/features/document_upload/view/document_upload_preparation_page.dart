@@ -13,6 +13,7 @@ import 'package:paperless_mobile/core/model/info_message_exception.dart';
 import 'package:paperless_mobile/core/widgets/icon_loading_widget.dart';
 import 'package:paperless_mobile/core/widgets/form_builder_fields/form_builder_localized_date_picker.dart';
 import 'package:paperless_mobile/core/widgets/future_or_builder.dart';
+import 'package:paperless_mobile/core/widgets/dialog_utils/pop_with_unsaved_changes.dart';
 import 'package:paperless_mobile/features/document_upload/model/document_upload_queue.dart';
 import 'package:paperless_mobile/features/labels/tags/view/widgets/tags_form_field.dart';
 import 'package:paperless_mobile/features/labels/view/widgets/single_label_form_field.dart';
@@ -82,243 +83,256 @@ class _DocumentUploadPreparationPageState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: false,
-      resizeToAvoidBottomInset: true,
-      floatingActionButton: Visibility(
-        visible: MediaQuery.of(context).viewInsets.bottom == 0,
-        child: FloatingActionButton.extended(
-          heroTag: "fab_document_upload",
-          onPressed: _uploadProgress == null ? _onSubmit : null,
-          label: _uploadProgress == null
-              ? Text(
-                  _hasQueuedNextItem
-                      ? '${S.of(context)!.upload} (${S.of(context)!.continueLabel})'
-                      : S.of(context)!.upload,
-                )
-              : Text(S.of(context)!.documentUploadUploading),
-          icon: _uploadProgress == null
-              ? const Icon(Icons.upload)
-              : IconLoadingWidget(progress: _uploadProgress).padded(4),
+    return PopWithUnsavedChanges(
+      hasChangesPredicate: () =>
+          _uploadProgress != null ||
+          (_formKey.currentState?.fields.values.any((f) => f.isDirty) ?? false),
+      child: Scaffold(
+        extendBodyBehindAppBar: false,
+        resizeToAvoidBottomInset: true,
+        floatingActionButton: Visibility(
+          visible: MediaQuery.of(context).viewInsets.bottom == 0,
+          child: FloatingActionButton.extended(
+            heroTag: "fab_document_upload",
+            onPressed: _uploadProgress == null ? _onSubmit : null,
+            label: _uploadProgress == null
+                ? Text(
+                    _hasQueuedNextItem
+                        ? '${S.of(context)!.upload} (${S.of(context)!.continueLabel})'
+                        : S.of(context)!.upload,
+                  )
+                : Text(S.of(context)!.documentUploadUploading),
+            icon: _uploadProgress == null
+                ? const Icon(Icons.upload)
+                : IconLoadingWidget(progress: _uploadProgress).padded(4),
+          ),
         ),
-      ),
-      body: FormBuilder(
-        key: _formKey,
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverOverlapAbsorber(
-              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-              sliver: SliverAppBar(
-                leading: const BackButton(),
-                pinned: true,
-                expandedHeight: 150,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: FutureOrBuilder<Uint8List>(
-                    future: widget.fileBytes,
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const SizedBox.shrink();
-                      }
-                      return Stack(
-                        alignment: AlignmentGeometry.topCenter,
-                        children: [
-                          FileThumbnail(
-                            bytes: snapshot.data!,
-                            fit: BoxFit.fitWidth,
-                            width: MediaQuery.sizeOf(context).width,
-                          ),
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              height: 72,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Colors.black87, Colors.transparent],
+        body: FormBuilder(
+          key: _formKey,
+          child: NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) => [
+              SliverOverlapAbsorber(
+                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                  context,
+                ),
+                sliver: SliverAppBar(
+                  leading: const BackButton(),
+                  pinned: true,
+                  expandedHeight: 150,
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: FutureOrBuilder<Uint8List>(
+                      future: widget.fileBytes,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const SizedBox.shrink();
+                        }
+                        return Stack(
+                          alignment: AlignmentGeometry.topCenter,
+                          children: [
+                            FileThumbnail(
+                              bytes: snapshot.data!,
+                              fit: BoxFit.fitWidth,
+                              width: MediaQuery.sizeOf(context).width,
+                            ),
+                            Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      Colors.black87,
+                                      Colors.transparent,
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
+                    title: Text(S.of(context)!.prepareDocument),
+                    collapseMode: CollapseMode.pin,
                   ),
-                  title: Text(S.of(context)!.prepareDocument),
-                  collapseMode: CollapseMode.pin,
                 ),
               ),
-            ),
-          ],
-          body: Padding(
-            padding: const EdgeInsets.only(top: 16.0),
-            child: Builder(
-              builder: (context) {
-                return CustomScrollView(
-                  slivers: [
-                    SliverOverlapInjector(
-                      handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                        context,
+            ],
+            body: Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Builder(
+                builder: (context) {
+                  return CustomScrollView(
+                    slivers: [
+                      SliverOverlapInjector(
+                        handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                          context,
+                        ),
                       ),
-                    ),
-                    SliverList.list(
-                      children: [
-                        if (_showQueueProgress)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Chip(
-                              avatar: const Icon(
-                                Icons.queue_play_next,
-                                size: 18,
+                      SliverList.list(
+                        children: [
+                          if (_showQueueProgress)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Chip(
+                                avatar: const Icon(
+                                  Icons.queue_play_next,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  '${widget.uploadQueueProgress!.currentItem}/${widget.uploadQueueProgress!.totalItems}',
+                                ),
                               ),
-                              label: Text(
-                                '${widget.uploadQueueProgress!.currentItem}/${widget.uploadQueueProgress!.totalItems}',
-                              ),
-                            ),
-                          ).paddedOnly(bottom: 12),
-                        // Title
-                        FormBuilderTextField(
-                          autovalidateMode: AutovalidateMode.always,
-                          name: 'title',
-                          initialValue:
-                              widget.title ??
-                              "scan_${fileNameDateFormat.format(_now)}",
-                          validator: (value) {
-                            if (value?.trim().isEmpty ?? true) {
-                              return S.of(context)!.thisFieldIsRequired;
-                            }
-                            return null;
-                          },
-                          decoration: InputDecoration(
-                            labelText: S.of(context)!.title,
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                _formKey.currentState?.fields['title']
-                                    ?.didChange("");
-                                if (_syncTitleAndFilename) {
-                                  _formKey.currentState?.fields[fkFileName]
+                            ).paddedOnly(bottom: 12),
+                          // Title
+                          FormBuilderTextField(
+                            autovalidateMode: AutovalidateMode.always,
+                            name: 'title',
+                            initialValue:
+                                widget.title ??
+                                "scan_${fileNameDateFormat.format(_now)}",
+                            validator: (value) {
+                              if (value?.trim().isEmpty ?? true) {
+                                return S.of(context)!.thisFieldIsRequired;
+                              }
+                              return null;
+                            },
+                            decoration: InputDecoration(
+                              labelText: S.of(context)!.title,
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  _formKey.currentState?.fields['title']
                                       ?.didChange("");
-                                }
-                              },
+                                  if (_syncTitleAndFilename) {
+                                    _formKey.currentState?.fields[fkFileName]
+                                        ?.didChange("");
+                                  }
+                                },
+                              ),
+                              errorText: _errors['title'],
                             ),
-                            errorText: _errors['title'],
-                          ),
-                          onChanged: (value) {
-                            final String transformedValue = _formatFilename(
-                              value ?? '',
-                            );
-                            if (_syncTitleAndFilename) {
-                              _formKey.currentState?.fields[fkFileName]
-                                  ?.didChange(transformedValue);
-                            }
-                          },
-                        ),
-                        // Filename
-                        FormBuilderTextField(
-                          autovalidateMode: AutovalidateMode.always,
-                          readOnly: _syncTitleAndFilename,
-                          enabled: !_syncTitleAndFilename,
-                          name: fkFileName,
-                          decoration: InputDecoration(
-                            labelText: S.of(context)!.fileName,
-                            suffixText: widget.fileExtension,
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => _formKey
-                                  .currentState
-                                  ?.fields[fkFileName]
-                                  ?.didChange(''),
-                            ),
-                          ),
-                          initialValue:
-                              widget.filename ??
-                              "scan_${fileNameDateFormat.format(_now)}",
-                        ),
-                        // Synchronize title and filename
-                        SwitchListTile(
-                          value: _syncTitleAndFilename,
-                          onChanged: (value) {
-                            setState(() => _syncTitleAndFilename = value);
-                            if (_syncTitleAndFilename) {
+                            onChanged: (value) {
                               final String transformedValue = _formatFilename(
-                                _formKey.currentState?.fields['title']?.value
-                                    as String,
+                                value ?? '',
                               );
                               if (_syncTitleAndFilename) {
                                 _formKey.currentState?.fields[fkFileName]
                                     ?.didChange(transformedValue);
                               }
-                            }
-                          },
-                          title: Text(
-                            S.of(context)!.synchronizeTitleAndFilename,
+                            },
                           ),
-                        ),
-                        // Created at
-                        FormBuilderLocalizedDatePicker(
-                          name: 'created',
-                          firstDate: DateTime(1000, 1, 1),
-                          lastDate: DateTime(9999, 12, 31),
-                          labelText: "${S.of(context)!.createdAt} *",
-                          allowUnset: true,
-                        ),
-                        // Correspondent
-                        if (context.uiSettings$.canViewCorrespondents)
-                          SingleLabelFormField<Correspondent>(
-                            query: context.correspondentRepository
-                                .getAllQuery(),
-                            onAddLabel:
-                                context.uiSettings$.canCreateCorrespondents
-                                ? (initialName) => CreateLabelRoute(
-                                    LabelType.correspondent,
-                                    name: initialName,
-                                  ).push<Correspondent>(context)
-                                : null,
-                            addLabelText:
-                                context.uiSettings$.canCreateCorrespondents
-                                ? S.of(context)!.addCorrespondent
-                                : null,
-                            labelText: "${S.of(context)!.correspondent} *",
-                            name: 'correspondent',
-                            prefixIcon: const Icon(Icons.person_outline),
+                          // Filename
+                          FormBuilderTextField(
+                            autovalidateMode: AutovalidateMode.always,
+                            readOnly: _syncTitleAndFilename,
+                            enabled: !_syncTitleAndFilename,
+                            name: fkFileName,
+                            decoration: InputDecoration(
+                              labelText: S.of(context)!.fileName,
+                              suffixText: widget.fileExtension,
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () => _formKey
+                                    .currentState
+                                    ?.fields[fkFileName]
+                                    ?.didChange(''),
+                              ),
+                            ),
+                            initialValue:
+                                widget.filename ??
+                                "scan_${fileNameDateFormat.format(_now)}",
                           ),
-                        // Document type
-                        if (context.uiSettings$.canViewDocumentTypes)
-                          SingleLabelFormField<DocumentType>(
-                            onAddLabel:
-                                context.uiSettings$.canCreateDocumentTypes
-                                ? (initialName) => CreateLabelRoute(
-                                    LabelType.documentType,
-                                    name: initialName,
-                                  ).push<DocumentType>(context)
-                                : null,
-                            addLabelText:
-                                context.uiSettings$.canCreateDocumentTypes
-                                ? S.of(context)!.addDocumentType
-                                : null,
-                            labelText: "${S.of(context)!.documentType} *",
-                            name: 'document_type',
-                            query: context.documentTypeRepository.getAllQuery(),
-                            prefixIcon: const Icon(Icons.description_outlined),
+                          // Synchronize title and filename
+                          SwitchListTile(
+                            value: _syncTitleAndFilename,
+                            onChanged: (value) {
+                              setState(() => _syncTitleAndFilename = value);
+                              if (_syncTitleAndFilename) {
+                                final String transformedValue = _formatFilename(
+                                  _formKey.currentState?.fields['title']?.value
+                                      as String,
+                                );
+                                if (_syncTitleAndFilename) {
+                                  _formKey.currentState?.fields[fkFileName]
+                                      ?.didChange(transformedValue);
+                                }
+                              }
+                            },
+                            title: Text(
+                              S.of(context)!.synchronizeTitleAndFilename,
+                            ),
                           ),
-                        if (context.uiSettings$.canViewTags)
-                          TagsFormField(
-                            name: 'tags',
-                            allowCreation: true,
-                            allowExclude: false,
+                          // Created at
+                          FormBuilderLocalizedDatePicker(
+                            name: 'created',
+                            firstDate: DateTime(1000, 1, 1),
+                            lastDate: DateTime(9999, 12, 31),
+                            labelText: "${S.of(context)!.createdAt} *",
+                            allowUnset: true,
                           ),
-                        Text(
-                          "* ${S.of(context)!.uploadInferValuesHint}",
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.justify,
-                        ).padded(),
-                        const SizedBox(height: 300),
-                      ].padded(),
-                    ),
-                  ],
-                );
-              },
+                          // Correspondent
+                          if (context.uiSettings$.canViewCorrespondents)
+                            SingleLabelFormField<Correspondent>(
+                              query: context.correspondentRepository
+                                  .getAllQuery(),
+                              onAddLabel:
+                                  context.uiSettings$.canCreateCorrespondents
+                                  ? (initialName) => CreateLabelRoute(
+                                      LabelType.correspondent,
+                                      name: initialName,
+                                    ).push<Correspondent>(context)
+                                  : null,
+                              addLabelText:
+                                  context.uiSettings$.canCreateCorrespondents
+                                  ? S.of(context)!.addCorrespondent
+                                  : null,
+                              labelText: "${S.of(context)!.correspondent} *",
+                              name: 'correspondent',
+                              prefixIcon: const Icon(Icons.person_outline),
+                            ),
+                          // Document type
+                          if (context.uiSettings$.canViewDocumentTypes)
+                            SingleLabelFormField<DocumentType>(
+                              onAddLabel:
+                                  context.uiSettings$.canCreateDocumentTypes
+                                  ? (initialName) => CreateLabelRoute(
+                                      LabelType.documentType,
+                                      name: initialName,
+                                    ).push<DocumentType>(context)
+                                  : null,
+                              addLabelText:
+                                  context.uiSettings$.canCreateDocumentTypes
+                                  ? S.of(context)!.addDocumentType
+                                  : null,
+                              labelText: "${S.of(context)!.documentType} *",
+                              name: 'document_type',
+                              query: context.documentTypeRepository
+                                  .getAllQuery(),
+                              prefixIcon: const Icon(
+                                Icons.description_outlined,
+                              ),
+                            ),
+                          if (context.uiSettings$.canViewTags)
+                            TagsFormField(
+                              name: 'tags',
+                              allowCreation: true,
+                              allowExclude: false,
+                            ),
+                          Text(
+                            "* ${S.of(context)!.uploadInferValuesHint}",
+                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.justify,
+                          ).padded(),
+                          const SizedBox(height: 300),
+                        ].padded(),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
