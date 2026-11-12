@@ -1,0 +1,13 @@
+# Fix PDF viewer annotation rendering for SharePoint and external editor markup (#688)
+
+## Summary
+Explicitly configures `annotationRenderingMode: PdfAnnotationRenderingMode.annotationAndForms` in `PdfViewerParams` within `PdfDocumentViewer` to ensure PDF annotations, comments, and form fields created by external editors (such as Microsoft SharePoint / OneDrive / Acrobat) are rendered accurately.
+
+## Problem
+In issue #688, users noted that text annotations and markup added to PDFs via SharePoint's web editor were visible in Paperless-ngx thumbnails and external viewers, but disappeared when viewed in the mobile app's built-in PDF viewer.
+
+## Solution
+- Explicitly set `annotationRenderingMode: PdfAnnotationRenderingMode.annotationAndForms` on `PdfViewerParams` in `PdfDocumentViewer`.
+- Added a widget test in `test/src/features/documents/view/pages/viewers/pdf_document_viewer_test.dart` verifying the annotation rendering mode is properly configured.
+
+Fixes #688
