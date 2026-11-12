@@ -1,0 +1,14 @@
+# Description
+Fixes #624
+
+### Root Cause
+When sharing a document from an external application to Paperless Mobile, both `ReceiveSharingIntent.getInitialMedia()` (cold start) and `ReceiveSharingIntent.getMediaStream()` (stream listener) emitted the same intent. Furthermore, when the Android Activity resumed from background, Android re-emitted cached intent extras because `ReceiveSharingIntent.reset()` was never invoked, causing incoming files to be processed and uploaded multiple times.
+
+### Solution
+- Added an in-memory tracking set `_processedFilePaths` with a 10-second cooldown in `EventListenerShell` to deduplicate incoming file paths.
+- Called `ReceiveSharingIntent.instance.reset()` immediately upon receiving shared media files to clear Android's cached intent extras.
+- Added unit tests in `test/src/features/sharing/share_deduplication_test.dart` verifying proper deduplication of rapid share events.
+
+### Verification
+- Unit tests: `test/src/features/sharing/share_deduplication_test.dart` passed (1/1 test)
+- Static analysis: `fvm flutter analyze lib/features/sharing/view/widgets/event_listener_shell.dart` reports 0 errors
