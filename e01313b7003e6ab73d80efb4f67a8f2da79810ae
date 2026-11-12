@@ -8,5 +8,11 @@ In `InboxItem`, suggestions are loaded via `QueryBuilder(query: context.document
 - Added explicit null safety guard `state.data == null` in `QueryBuilder` before accessing `state.data`.
 - Fixed inverted logic in suggestions notification so `noSuggestionsForThisDocument` is only displayed when suggestions are genuinely empty (`!hasSuggestions`).
 
+### Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-652-before.png) | ![After](.git/screenshots/issue-652-after.png) |
+
 ### Verification
 - Static analysis: `fvm flutter analyze lib/features/inbox/view/widgets/inbox_item.dart` reports 0 errors
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
