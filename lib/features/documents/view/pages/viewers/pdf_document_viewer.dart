@@ -70,6 +70,8 @@ class _PdfDocumentViewerState extends State<PdfDocumentViewer> {
         controller: _controller,
         params: PdfViewerParams(
           backgroundColor: Theme.of(context).colorScheme.surface,
+          annotationRenderingMode:
+              PdfAnnotationRenderingMode.annotationAndForms,
           textSelectionParams: PdfTextSelectionParams(
             enabled: true,
             buildSelectionHandle: (context, anchor, state) {
