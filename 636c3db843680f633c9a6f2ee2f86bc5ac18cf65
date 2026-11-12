@@ -1,1 +1,20 @@
-PR draft for Issue #672
+# PR: Support 'longtext' custom field data type and unknown type fallback (#672)
+
+## Summary of Changes
+- **Longtext Enum Support:** Added `longtext` to `DataTypeEnum` to support Paperless-ngx v3.0+ multi-line long text custom fields.
+- **Resilience Against Future Types:** Added `@JsonKey(unknownEnumValue: DataTypeEnum.string)` on `CustomField.dataType` so introducing any new custom field types upstream in Paperless-ngx will no longer crash the entire custom fields fetch.
+- **UI & Form Editor Mapping:** Render `longtext` with `StringFieldValue` in document overview and `StringFormField` in edit mode.
+- **Icons & Metadata:** Mapped `Icons.notes` as the icon for `longtext` and added display names in the label creation/edit dialogs.
+- **Automated Tests:** Added unit tests verifying `longtext` parsing and unknown type fallback behavior.
+
+## Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-672-before.png) | ![After](.git/screenshots/issue-672-after.png) |
+
+## Verification
+- Unit tests: `test/src/features/custom_fields/custom_field_longtext_test.dart`
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
+
+## Related Issues
+- Fixes #672
