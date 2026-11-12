@@ -33,8 +33,14 @@ Fixes #483
    - Normal CJK input candidate selection
    - Automatic first-letter sentence capitalization
 
+### Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-407-before.png) | ![After](.git/screenshots/issue-407-after.png) |
+
 ### Verification
 - **Widget Tests:** Added `test/src/features/keyboard_suggestions_test.dart` verifying that `StringFormField`, single-line text fields, and multi-line fields properly configure `autocorrect: true`, `enableSuggestions: true`, `textCapitalization: TextCapitalization.sentences`, and the expected `keyboardType`. All 3 tests passed.
 - **Regression Tests:** Ran `test/src/widget_test.dart` (all tests passed).
 - **Static Analysis:** `fvm flutter analyze` reports 0 errors and 0 warnings across all 11 modified and new files.
 - **Formatting:** Formatted all Dart code with `fvm dart format`.
+- **Emulator Verification:** Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
