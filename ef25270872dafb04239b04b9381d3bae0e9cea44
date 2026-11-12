@@ -1,0 +1,14 @@
+# Description
+Fixes #333
+
+### Root Cause
+When opening a Markdown (`.md` or `.markdown`) or YAML (`.yaml` or `.yml`) file from the document details view via external system viewer, `lookupMimeType` returns `text/markdown`. Standard Android installations do not have a default registered intent filter or Activity for `text/markdown`, causing `open_file` to throw an unhandled `PlatformException` or fail with `ResultType.noAppToOpen`.
+
+### Solution
+- Added `DocumentOpenInSystemCubit.resolveMimeType` which maps `.md`, `.markdown`, `.yaml`, and `.yml` to `text/plain` so standard installed text editors and viewers can display the file.
+- Added a fallback retry using `type: 'text/plain'` if opening with the detected MIME type returns `ResultType.noAppToOpen`.
+- Added unit tests in `test/src/features/document_details/document_open_in_system/resolve_mime_type_test.dart` verifying proper MIME type resolution and fallbacks.
+
+### Verification
+- Unit tests: `test/src/features/document_details/document_open_in_system/resolve_mime_type_test.dart` passed (4/4 tests)
+- Static analysis: `fvm flutter analyze lib/features/document_details/document_open_in_system/cubit/document_open_in_system_cubit.dart` reports 0 errors
