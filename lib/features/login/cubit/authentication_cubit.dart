@@ -355,7 +355,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final uiSettings = await _getUserProfile();
     final localUserId = _buildLocalUserId(uiSettings, serverUrl);
 
-    if (_store.state.localUserData.containsKey(localUserId)) {
+    // Only reject if the user is already actively logged in with this account (#647).
+    // Re-logging in after logout or updating credentials should update the existing account.
+    final currentLoggedInUser = _store.state.loggedInAppUserId;
+    if (currentLoggedInUser != null &&
+        currentLoggedInUser == localUserId &&
+        _store.state.localUserData.containsKey(localUserId)) {
       throw InfoMessageException(code: ErrorCode.userAlreadyExists);
     }
 
