@@ -9,5 +9,11 @@ In `DocumentUploadPreparationPage`, back navigation (via the top app bar `BackBu
 - Checked `_uploadProgress != null` or whether any form field is dirty (`_formKey.currentState?.fields.values.any((f) => f.isDirty)`) before allowing navigation.
 - If changes exist, prompts user with `UnsavedChangesWarningDialog` to confirm discarding metadata.
 
+### Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-689-before.png) | ![After](.git/screenshots/issue-689-after.png) |
+
 ### Verification
 - Static analysis: `fvm flutter analyze lib/features/document_upload/view/document_upload_preparation_page.dart` reports 0 errors
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
