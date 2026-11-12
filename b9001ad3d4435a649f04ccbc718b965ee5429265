@@ -1,0 +1,16 @@
+# Fix blank document thumbnails by sanitizing cache directory names and adding fallback error placeholder (#675)
+
+## Summary
+1. Sanitizes user IDs used as `CacheManager` directory keys to contain only filesystem-safe characters (`[a-zA-Z0-9_-]`), preventing cache directory creation failures on modern Android / HyperOS when user IDs contain `@`, `:`, or slashes.
+2. Replaces empty `SizedBox.shrink()` error widgets in `DocumentPreview` with a structured document placeholder icon and logs thumbnail loading failures via `errorListener`.
+
+## Problem
+In issue #675, thumbnails rendered as blank white boxes on devices running Android 14+ / HyperOS even though thumbnail HTTP 200 responses were received.
+Because `appUserId` (often containing format `user@https://host:port`) was passed directly as the `CacheManager` configuration key, filesystem path creation failed silently on restricted environments. Furthermore, `DocumentPreview` swallowed errors with `errorWidget: (ctxt, msg, _) => SizedBox.shrink()`, showing empty boxes with no placeholder.
+
+## Solution
+- Added `HomeShellWidget.sanitizeCacheKey` to strip non-alphanumeric characters from cache directory names.
+- Updated `DocumentPreview` to display a themed document icon placeholder in `errorWidget` and log decoding/network failures via `errorListener`.
+- Added unit tests in `test/src/features/home/sanitize_cache_key_test.dart`.
+
+Fixes #675
