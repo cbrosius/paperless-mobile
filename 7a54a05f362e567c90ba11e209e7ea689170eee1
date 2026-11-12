@@ -1,0 +1,15 @@
+# Fix biometric lockout unhandled platform exception (#442)
+
+## Summary
+Catches `PlatformException` (e.g. `LockedOut`, `PermanentlyLockedOut`) in `LocalAuthenticationService.authenticateLocalUser` and returns `false` instead of allowing the unhandled platform exception to crash the authentication flow.
+
+## Problem
+When a user attempts fingerprint unlocking and fails multiple times (e.g., 5 attempts on Android), the OS biometric prompt locks out further attempts for 30 seconds and throws `PlatformException(LockedOut, ...)`.
+Because `localAuthentication.authenticate(...)` was unhandled, this threw an uncaught exception in the app, aborting session restoration and locking the user on a blank screen instead of falling back to PIN/password authentication.
+
+## Solution
+- Wrapped `localAuthentication.authenticate(...)` in a `try / on PlatformException` block.
+- Gracefully returns `false` on platform exceptions (such as `LockedOut` or `PermanentlyLockedOut`), allowing `AuthenticationCubit` to cleanly transition to `VerifyingIdentity` where the user can enter their credentials.
+- Added comprehensive unit tests in `test/src/features/login/local_authentication_service_test.dart` verifying successful authentication, handling of `PlatformException`, and unsupported devices.
+
+Fixes #442
