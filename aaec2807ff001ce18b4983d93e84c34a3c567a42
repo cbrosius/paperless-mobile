@@ -1,0 +1,12 @@
+# Description
+Fixes #647
+
+### Root Cause
+When logging out of an account, `_store.setLoggedInAppUserId(null)` unsets the active user, but retains the user metadata in `_store.state.localUserData` to facilitate fast account switching. When the user subsequently logged back in (including via 2FA / TOTP), `AuthenticationCubit._addUser` unconditionally checked `if (_store.state.localUserData.containsKey(localUserId)) throw InfoMessageException(code: ErrorCode.userAlreadyExists)`. This rejected valid logins for returning users with the error "This user already exists".
+
+### Solution
+- Updated `AuthenticationCubit._addUser` to only throw `userAlreadyExists` if the user is already the actively logged-in user (`currentLoggedInUser == localUserId`).
+- Re-logging in after logout or updating credentials for an existing account now successfully refreshes the encrypted credentials, updates local user data, and completes the login.
+
+### Verification
+- Static analysis: `fvm flutter analyze lib/features/login/cubit/authentication_cubit.dart` reports 0 errors
