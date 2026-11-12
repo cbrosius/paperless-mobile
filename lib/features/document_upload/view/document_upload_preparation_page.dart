@@ -307,6 +307,7 @@ class _DocumentUploadPreparationPageState
                             name: 'tags',
                             allowCreation: true,
                             allowExclude: false,
+                            labelText: "${S.of(context)!.tags} *",
                           ),
                         Text(
                           "* ${S.of(context)!.uploadInferValuesHint}",

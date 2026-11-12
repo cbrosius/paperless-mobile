@@ -17,6 +17,8 @@ class TagsFormField extends StatelessWidget {
   final bool allowExclude;
   final Iterable<int> suggestions;
 
+  final String? labelText;
+
   const TagsFormField({
     super.key,
     this.initialValue,
@@ -24,6 +26,7 @@ class TagsFormField extends StatelessWidget {
     required this.allowCreation,
     required this.allowExclude,
     this.suggestions = const [],
+    this.labelText,
   });
 
   @override
@@ -200,7 +203,7 @@ class TagsFormField extends StatelessWidget {
         enabled: enabled,
         decoration: InputDecoration(
           prefixIcon: const Icon(Icons.label_outline),
-          labelText: S.of(context)!.tags,
+          labelText: labelText ?? S.of(context)!.tags,
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear),
@@ -228,7 +231,7 @@ class TagsFormField extends StatelessWidget {
             contentPadding: const EdgeInsets.all(12),
             prefixIcon: const Icon(Icons.label_outline),
             enabled: enabled,
-            labelText: S.of(context)!.tags,
+            labelText: labelText ?? S.of(context)!.tags,
           ),
           child: SizedBox(
             height: 32,
