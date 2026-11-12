@@ -14,6 +14,11 @@ class ConsumptionChangeNotifier extends ChangeNotifier {
 
   Future<void> get isInitialized => _restored.future;
 
+  /// Sanitizes a file name by replacing directory separators and illegal characters (#437).
+  static String sanitizeFileName(String fileName) {
+    return fileName.replaceAll(RegExp(r'[/\\?%*:|"<>]+'), '_');
+  }
+
   Future<void> loadFromConsumptionDirectory({required String userId}) async {
     pendingFiles = await _getCurrentFiles(userId);
     if (!_restored.isCompleted) {
@@ -33,13 +38,32 @@ class ConsumptionChangeNotifier extends ChangeNotifier {
     }
     final consumptionDirectory = await FileService.instance
         .getConsumptionDirectory(userId: userId);
+    if (!await consumptionDirectory.exists()) {
+      await consumptionDirectory.create(recursive: true);
+    }
     final List<File> localFiles = [];
     for (final file in files) {
       if (!file.path.startsWith(consumptionDirectory.path)) {
-        final localFile = await file.copy(
-          p.join(consumptionDirectory.path, p.basename(file.path)),
-        );
-        localFiles.add(localFile);
+        try {
+          final sanitizedName = sanitizeFileName(p.basename(file.path));
+          final destinationPath = p.join(
+            consumptionDirectory.path,
+            sanitizedName,
+          );
+          final localFile = await file.copy(destinationPath);
+          localFiles.add(localFile);
+        } catch (_) {
+          // If copy fails with sanitized basename, try ensuring parent and retry
+          try {
+            final fallbackFile = File(
+              p.join(
+                consumptionDirectory.path,
+                'shared_${DateTime.now().millisecondsSinceEpoch}_${p.extension(file.path)}',
+              ),
+            );
+            localFiles.add(await file.copy(fallbackFile.path));
+          } catch (_) {}
+        }
       } else {
         localFiles.add(file);
       }
