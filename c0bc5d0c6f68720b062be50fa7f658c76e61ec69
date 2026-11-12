@@ -1,0 +1,12 @@
+# Description
+Fixes #431
+
+### Root Cause
+On the "Prepare Document" page, correspondent and document type fields displayed an asterisk `*` indicating they are automatically populated by server matching algorithms when left blank (explained by the footnote `* Value can be inferred automatically by paperless-ngx if not provided`). However, `TagsFormField` lacked a customizable label and hardcoded `S.of(context)!.tags` without the asterisk, causing inconsistency.
+
+### Solution
+- Added optional `labelText` property to `TagsFormField` defaulting to `S.of(context)!.tags`.
+- Passed `labelText: "${S.of(context)!.tags} *"` in `DocumentUploadPreparationPage` to match correspondent and document type.
+
+### Verification
+- Static analysis: `fvm flutter analyze` on modified files reports 0 errors
