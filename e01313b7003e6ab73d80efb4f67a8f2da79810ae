@@ -1,0 +1,12 @@
+# Description
+Fixes #652
+
+### Root Cause
+In `InboxItem`, suggestions are loaded via `QueryBuilder(query: context.documentRepository.getFieldSuggestionsQuery(...))`. While the query is transitioning, refetching, or uninitialized, `state.data` can be `null` even if `state.isInitial` or `state.isLoadingInitial` evaluate to false. Force unwrapping `final suggestions = state.data!;` triggered `Null check operator used on a null value`, crashing the inbox list item render. Additionally, an inverted check `if (hasSuggestions)` was incorrectly showing `noSuggestionsForThisDocument` when suggestions were actually present.
+
+### Solution
+- Added explicit null safety guard `state.data == null` in `QueryBuilder` before accessing `state.data`.
+- Fixed inverted logic in suggestions notification so `noSuggestionsForThisDocument` is only displayed when suggestions are genuinely empty (`!hasSuggestions`).
+
+### Verification
+- Static analysis: `fvm flutter analyze lib/features/inbox/view/widgets/inbox_item.dart` reports 0 errors
