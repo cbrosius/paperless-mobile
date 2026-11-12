@@ -1,1 +1,21 @@
-PR draft for Issue #648
+# PR: Fix Custom Fields (type: Selection/Date) cleared in edit mode (#648)
+
+## Summary of Changes
+- **Select Custom Field Matching:** Fixed `SelectFormField._findMatchingValue` to inspect `option['id'] ?? option['value']` and support robust string/number comparison instead of comparing the entire option map to the primitive value.
+- **Robust Options Parsing:** In `SelectFormField._parseOptions`, convert entries to `Map<String, dynamic>` safely from dynamic maps.
+- **Select Label Resolution:** Updated `SelectFieldValue._resolveSelectLabel` for consistent fallback lookup across `id` and `value` fields.
+- **Date Custom Field Parsing:** Enhanced `DateFormField._parseDate` to handle `DateTime` objects, timestamp integers, and common date formats, and wrapped formatted text in a safe helper (`_formatDate`) falling back to `apiDateFormat` if `context.displayDateFormat` cannot be accessed.
+- **Form Hierarchy Inversion:** In `FormBuilderCustomFieldsField`, moved `FormBuilderField<List<CustomFieldInstance>>` outside `QueryBuilder` so the form field is registered immediately upon mounting, preserving `initialValue` even while custom fields definitions are loading.
+- **Automated Tests:** Added widget tests in `test/src/features/custom_fields/custom_field_form_field_test.dart` verifying that both `SelectFormField` and `DateFormField` correctly load and display their initial values.
+
+## Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-648-before.png) | ![After](.git/screenshots/issue-648-after.png) |
+
+## Verification
+- Unit & Widget tests: `test/src/features/custom_fields/custom_field_form_field_test.dart`
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
+
+## Related Issues
+- Fixes #648
