@@ -1,0 +1,15 @@
+# Description
+Fixes #656
+
+### Root Cause
+When managing multiple Paperless-ngx instances/accounts with overlapping document IDs (e.g. Document #1 exists on both servers), `DocumentPreview` used a flat, un-scoped cache key `cacheKey: "thumb_$documentId"`.
+Because `CachedNetworkImage` and Flutter's in-memory `ImageCache` store image providers by key, switching between server accounts caused thumbnails from the previous server to be retrieved and displayed for identical document IDs on the current server.
+
+### Solution
+- Added `DocumentPreview.buildCacheKey` which prefixes the cache key with `context.loggedInAppUserId` (e.g. `"${userId}_thumb_$documentId"`).
+- Isolated both disk cache keys and memory `ImageCache` keys per user account, preventing thumbnail collision when switching between instances.
+- Added comprehensive unit tests in `test/src/features/documents/widgets/document_preview_test.dart` verifying distinct cache keys for identical document IDs across accounts.
+
+### Verification
+- Unit tests: `test/src/features/documents/widgets/document_preview_test.dart` passed (2/2 tests)
+- Static analysis: `fvm flutter analyze lib/` reports 0 errors
