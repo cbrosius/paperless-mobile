@@ -1,0 +1,13 @@
+# Description
+Fixes #689
+
+### Root Cause
+In `DocumentUploadPreparationPage`, back navigation (via the top app bar `BackButton` or system back swipe gesture) was unintercepted. If a user entered titles, correspondents, document types, or tags and accidentally tapped back, the entire state was immediately discarded without confirmation.
+
+### Solution
+- Wrapped `DocumentUploadPreparationPage` in `PopWithUnsavedChanges`.
+- Checked `_uploadProgress != null` or whether any form field is dirty (`_formKey.currentState?.fields.values.any((f) => f.isDirty)`) before allowing navigation.
+- If changes exist, prompts user with `UnsavedChangesWarningDialog` to confirm discarding metadata.
+
+### Verification
+- Static analysis: `fvm flutter analyze lib/features/document_upload/view/document_upload_preparation_page.dart` reports 0 errors
