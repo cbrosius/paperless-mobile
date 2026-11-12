@@ -6,6 +6,7 @@ import 'package:open_file/open_file.dart';
 import 'package:paperless_mobile/api/paperless_api.dart';
 import 'package:paperless_mobile/core/repository/document_repository.dart';
 import 'package:paperless_mobile/core/service/file_service.dart';
+import 'package:path/path.dart' as p;
 
 part 'document_open_in_system_state.dart';
 
@@ -43,16 +44,31 @@ class DocumentOpenInSystemCubit extends Cubit<DocumentOpenInSystemState> {
               emit(DocumentOpenInSystemInProgress(progress)),
         );
       }
-      //TODO: Some mime types are not correctly detected by lookupMimeType, e.g. yaml files
-      final mimeType = lookupMimeType(filePath);
-      final resultType = await OpenFile.open(
-        file.path,
-        type: mimeType,
-      ).then((value) => value.type);
-      emit(DocumentOpenInSystemSuccess(resultType));
+      final mimeType = resolveMimeType(filePath);
+      var openResult = await OpenFile.open(file.path, type: mimeType);
+      if (openResult.type == ResultType.noAppToOpen &&
+          mimeType != 'text/plain') {
+        openResult = await OpenFile.open(file.path, type: 'text/plain');
+      }
+      emit(DocumentOpenInSystemSuccess(openResult.type));
     } catch (e) {
       emit(DocumentOpenInSystemError(e));
       return;
     }
+  }
+
+  /// Resolves the MIME type for external system viewer with fallbacks
+  /// for markdown and plain text formats that Android lacks intent handlers for (#333).
+  static String? resolveMimeType(String filePath) {
+    final mime = lookupMimeType(filePath);
+    final ext = p.extension(filePath).toLowerCase();
+    if (mime == 'text/markdown' ||
+        ext == '.md' ||
+        ext == '.markdown' ||
+        ext == '.yaml' ||
+        ext == '.yml') {
+      return 'text/plain';
+    }
+    return mime;
   }
 }
