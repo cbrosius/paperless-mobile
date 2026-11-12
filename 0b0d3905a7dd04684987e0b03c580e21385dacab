@@ -1,0 +1,15 @@
+# Description
+Fixes #437
+
+### Root Cause
+When sharing a file from Google Drive via "Send copy" ("Kopie senden"), Google Drive provides a display name that may contain slashes or illegal path characters (e.g. `Rechnung 08/2024.pdf`). In `ConsumptionChangeNotifier.addFiles`, the path was concatenated using `p.join(consumptionDirectory.path, p.basename(file.path))`. Because the slash was treated as a directory separator pointing to a non-existent subdirectory, the copy operation failed with `PathNotFoundException`, silently preventing the document upload preparation page from opening.
+
+### Solution
+- Added `ConsumptionChangeNotifier.sanitizeFileName` to replace slashes, backslashes, colons, and illegal filesystem characters with underscores (`_`).
+- Ensured `consumptionDirectory.create(recursive: true)` is called before writing.
+- Added graceful fallback handling in `addFiles` so copy failures do not crash the share receiver.
+- Added comprehensive unit tests in `test/src/features/sharing/sanitize_filename_test.dart` verifying filename sanitization and special character replacement.
+
+### Verification
+- Unit tests: `test/src/features/sharing/sanitize_filename_test.dart` passed (3/3 tests)
+- Static analysis: `fvm flutter analyze lib/features/sharing/cubit/receive_share_cubit.dart` reports 0 errors
