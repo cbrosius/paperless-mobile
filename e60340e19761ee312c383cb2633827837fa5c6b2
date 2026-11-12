@@ -1,1 +1,19 @@
-PR draft for Issue #681
+# PR: Localized custom monetary field formatting and default currency support (#681)
+
+## Summary of Changes
+- **Pass extraData to MonetaryFieldValue:** Updated `CustomFieldWidget` to forward `extraData` when rendering `DataTypeEnum.monetary`.
+- **Currency Code Parsing:** Added `_parseValue` in `MonetaryFieldValue` to parse both prefixes (`EUR12.50`) and suffixes (`12.50 EUR`) as well as plain numeric values.
+- **Default Currency & Locale Fallback:** Resolves `default_currency` from `extraData`, and uses `Localizations.localeOf(context)` for localized number formatting (such as `,` as decimal separator and trailing symbol in European locales).
+- **Automated Tests:** Added widget tests in `test/src/features/custom_fields/monetary_field_value_test.dart` for default currency in German locale, embedded prefixes, and US locale fallback.
+
+## Visual Comparison (Before & After)
+| Before Fix | After Fix |
+|:---:|:---:|
+| ![Before](.git/screenshots/issue-681-before.png) | ![After](.git/screenshots/issue-681-after.png) |
+
+## Verification
+- Unit & widget tests: `test/src/features/custom_fields/monetary_field_value_test.dart`
+- Verified on Android emulator (`emulator-5554` / `Medium_Phone_API_37.0`)
+
+## Related Issues
+- Fixes #681
