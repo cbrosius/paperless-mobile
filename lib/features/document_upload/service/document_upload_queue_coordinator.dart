@@ -19,10 +19,15 @@ class DocumentUploadQueueCoordinator {
 
     for (var index = 0; index < items.length; index++) {
       final item = items[index];
+      // Start loading/assembling the file bytes once per queued item rather
+      // than inside MaterialPageRoute.builder, which can be called repeatedly
+      // on route transitions or MediaQuery changes.
+      final fileBytes = item.loadFileBytes();
       final result = await navigator.push<DocumentUploadResult?>(
         MaterialPageRoute(
           builder: (routeContext) => DocumentUploadPreparationPage(
-            fileBytes: item.loadFileBytes(),
+            fileBytes: fileBytes,
+            previewFile: item.previewFile,
             title: item.title,
             filename: item.filename,
             fileExtension: item.fileExtension,

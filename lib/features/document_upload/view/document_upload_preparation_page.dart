@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -32,6 +33,7 @@ class DocumentUploadResult {
 
 class DocumentUploadPreparationPage extends StatefulWidget {
   final FutureOr<Uint8List> fileBytes;
+  final File? previewFile;
   final String? title;
   final String? filename;
   final String? fileExtension;
@@ -41,6 +43,7 @@ class DocumentUploadPreparationPage extends StatefulWidget {
   const DocumentUploadPreparationPage({
     super.key,
     required this.fileBytes,
+    this.previewFile,
     this.title,
     this.filename,
     this.fileExtension,
@@ -85,21 +88,23 @@ class _DocumentUploadPreparationPageState
     return Scaffold(
       extendBodyBehindAppBar: false,
       resizeToAvoidBottomInset: true,
-      floatingActionButton: Visibility(
-        visible: MediaQuery.of(context).viewInsets.bottom == 0,
-        child: FloatingActionButton.extended(
-          heroTag: "fab_document_upload",
-          onPressed: _uploadProgress == null ? _onSubmit : null,
-          label: _uploadProgress == null
-              ? Text(
-                  _hasQueuedNextItem
-                      ? '${S.of(context)!.upload} (${S.of(context)!.continueLabel})'
-                      : S.of(context)!.upload,
-                )
-              : Text(S.of(context)!.documentUploadUploading),
-          icon: _uploadProgress == null
-              ? const Icon(Icons.upload)
-              : IconLoadingWidget(progress: _uploadProgress).padded(4),
+      floatingActionButton: Builder(
+        builder: (context) => Visibility(
+          visible: MediaQuery.viewInsetsOf(context).bottom == 0,
+          child: FloatingActionButton.extended(
+            heroTag: "fab_document_upload",
+            onPressed: _uploadProgress == null ? _onSubmit : null,
+            label: _uploadProgress == null
+                ? Text(
+                    _hasQueuedNextItem
+                        ? '${S.of(context)!.upload} (${S.of(context)!.continueLabel})'
+                        : S.of(context)!.upload,
+                  )
+                : Text(S.of(context)!.documentUploadUploading),
+            icon: _uploadProgress == null
+                ? const Icon(Icons.upload)
+                : IconLoadingWidget(progress: _uploadProgress).padded(4),
+          ),
         ),
       ),
       body: FormBuilder(
@@ -113,37 +118,29 @@ class _DocumentUploadPreparationPageState
                 pinned: true,
                 expandedHeight: 150,
                 flexibleSpace: FlexibleSpaceBar(
-                  background: FutureOrBuilder<Uint8List>(
-                    future: widget.fileBytes,
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const SizedBox.shrink();
-                      }
-                      return Stack(
-                        alignment: AlignmentGeometry.topCenter,
-                        children: [
+                  background: widget.previewFile != null
+                      ? _buildPreviewStack(
                           FileThumbnail(
-                            bytes: snapshot.data!,
+                            file: widget.previewFile!,
                             fit: BoxFit.fitWidth,
                             width: MediaQuery.sizeOf(context).width,
                           ),
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              height: 72,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [Colors.black87, Colors.transparent],
-                                ),
+                        )
+                      : FutureOrBuilder<Uint8List>(
+                          future: widget.fileBytes,
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return const SizedBox.shrink();
+                            }
+                            return _buildPreviewStack(
+                              FileThumbnail(
+                                bytes: snapshot.data!,
+                                fit: BoxFit.fitWidth,
+                                width: MediaQuery.sizeOf(context).width,
                               ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                            );
+                          },
+                        ),
                   title: Text(S.of(context)!.prepareDocument),
                   collapseMode: CollapseMode.pin,
                 ),
@@ -323,6 +320,28 @@ class _DocumentUploadPreparationPageState
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPreviewStack(Widget thumbnail) {
+    return Stack(
+      alignment: AlignmentGeometry.topCenter,
+      children: [
+        thumbnail,
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            height: 72,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Colors.black87, Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

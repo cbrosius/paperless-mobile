@@ -28,27 +28,39 @@ class FileThumbnail extends StatefulWidget {
 
 class _FileThumbnailState extends State<FileThumbnail> {
   late String? mimeType;
-  late final Future<Uint8List?> _fileBytes;
+  Future<Uint8List?>? _pdfThumbnailFuture;
+
   @override
   void initState() {
     super.initState();
     mimeType = widget.file != null
         ? mime.lookupMimeType(widget.file!.path)
         : mime.lookupMimeType('', headerBytes: widget.bytes);
-    _fileBytes =
-        widget.file?.readAsBytes().then(_convertPdfToPng) ??
-        _convertPdfToPng(widget.bytes!);
+    if (mimeType == "application/pdf") {
+      _pdfThumbnailFuture =
+          widget.file?.readAsBytes().then(_convertPdfToPng) ??
+          _convertPdfToPng(widget.bytes!);
+    }
+  }
+
+  int? _resolveCacheWidth(BuildContext context) {
+    final width = widget.width;
+    if (width == null || !width.isFinite || width <= 0) {
+      return null;
+    }
+    return (width * MediaQuery.devicePixelRatioOf(context)).round();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cacheWidth = _resolveCacheWidth(context);
     return switch (mimeType) {
       "application/pdf" => SizedBox(
         width: widget.width,
         height: widget.height,
         child: Center(
           child: FutureBuilder<Uint8List?>(
-            future: _fileBytes,
+            future: _pdfThumbnailFuture,
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const SizedBox.shrink();
@@ -61,6 +73,7 @@ class _FileThumbnailState extends State<FileThumbnail> {
                   fit: widget.fit,
                   width: widget.width,
                   height: widget.height,
+                  cacheWidth: cacheWidth,
                 ),
               );
             },
@@ -78,12 +91,14 @@ class _FileThumbnailState extends State<FileThumbnail> {
                 fit: widget.fit,
                 width: widget.width,
                 height: widget.height,
+                cacheWidth: cacheWidth,
               )
             : Image.memory(
                 widget.bytes!,
                 fit: widget.fit,
                 width: widget.width,
                 height: widget.height,
+                cacheWidth: cacheWidth,
               ),
       "text/plain" => const Center(child: Text(".txt")),
       _ => const Icon(Icons.file_present_outlined),

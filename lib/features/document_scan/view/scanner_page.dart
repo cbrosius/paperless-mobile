@@ -385,6 +385,9 @@ class _ScannerPageState extends State<ScannerPage>
               documentScan.pageFiles,
               forcePdf: forcePdf,
             ).then((file) => file.bytes),
+            previewFile: documentScan.pageFiles.isNotEmpty
+                ? documentScan.pageFiles.first
+                : null,
             title: documentScan.name ?? _formatDefaultTitle(documentScan),
             filename: _formatUploadFileName(
               documentScan.name ?? _formatDefaultTitle(documentScan),

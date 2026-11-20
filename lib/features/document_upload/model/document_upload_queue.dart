@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
@@ -21,6 +22,7 @@ class DocumentUploadQueueProgress {
 class DocumentUploadQueueItem<T> {
   final T source;
   final FutureOr<Uint8List> Function() loadFileBytes;
+  final File? previewFile;
   final String? title;
   final String? filename;
   final String? fileExtension;
@@ -29,6 +31,7 @@ class DocumentUploadQueueItem<T> {
   const DocumentUploadQueueItem({
     required this.source,
     required this.loadFileBytes,
+    this.previewFile,
     this.title,
     this.filename,
     this.fileExtension,
