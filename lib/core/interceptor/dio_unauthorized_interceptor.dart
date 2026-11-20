@@ -4,7 +4,8 @@ import 'package:paperless_mobile/api/paperless_api.dart';
 class DioUnauthorizedInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (err.response?.statusCode == 403) {
+    final statusCode = err.response?.statusCode;
+    if (statusCode == 401 || statusCode == 403) {
       final data = err.response!.data;
       String? message;
       if (PaperlessServerMessageException.canParse(data)) {
@@ -15,7 +16,10 @@ class DioUnauthorizedInterceptor extends Interceptor {
         DioException(
           message: message,
           requestOptions: err.requestOptions,
-          error: PaperlessUnauthorizedException(message),
+          error: PaperlessUnauthorizedException(
+            message,
+            statusCode: statusCode,
+          ),
           response: err.response,
           type: DioExceptionType.badResponse,
         ),

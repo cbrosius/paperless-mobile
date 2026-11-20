@@ -20,6 +20,7 @@ import 'package:paperless_mobile/core/service/dio_file_service.dart';
 import 'package:paperless_mobile/core/store/local_store.dart';
 import 'package:paperless_mobile/core/store/slices/local_user_account.dart';
 import 'package:paperless_mobile/features/document_scan/cubit/document_scanner_cubit.dart';
+import 'package:paperless_mobile/features/login/cubit/authentication_cubit.dart';
 import 'package:paperless_mobile/features/login/view/widgets/login_transition_page.dart';
 import 'package:paperless_mobile/features/tasks/model/pending_tasks_notifier.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
@@ -148,6 +149,21 @@ class HomeShellWidget extends StatelessWidget {
                     text: S.of(context)!.fetchingUserInformation,
                   );
                 } else if (state.isError) {
+                  final error = state.error;
+                  if (error is PaperlessUnauthorizedException &&
+                      error.isInvalidToken) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        context.read<AuthenticationCubit>().handleInvalidToken(
+                          appUserId,
+                          error: error,
+                        );
+                      }
+                    });
+                    return LoginTransitionPage(
+                      text: S.of(context)!.fetchingUserInformation,
+                    );
+                  }
                   return SizedBox.shrink(); // TODO: Show actual error
                 }
                 final sessionData = state.data!;

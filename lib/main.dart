@@ -337,6 +337,13 @@ class _GoRouterShellState extends State<GoRouterShell> {
                       S.of(context)!.couldNotEstablishConnectionToTheServer,
                     );
                     LoginToExistingAccountRoute().go(context);
+                  case SessionExpired(:final serverUrl, :final error):
+                    showGenericError(
+                      context,
+                      error ?? PaperlessUnauthorizedException(null),
+                    );
+                    AuthRoute(initialHost: serverUrl).go(context);
+                    break;
                   default:
                     break;
                 }

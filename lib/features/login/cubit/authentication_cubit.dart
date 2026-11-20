@@ -160,12 +160,35 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
 
+      // Verify that the stored API token is still accepted by the server.
+      await _getUserProfile();
+
       emit(Authenticated(localUserId: localUserId));
       logger.fd(
         'Switched to user $redactedId.',
         className: runtimeType.toString(),
         methodName: 'switchAccount',
       );
+    } on PaperlessUnauthorizedException catch (error, stackTrace) {
+      if (error.isInvalidToken) {
+        logger.fw(
+          'Stored API token is invalid during account switch for $redactedId.',
+          className: runtimeType.toString(),
+          methodName: 'switchAccount',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        await handleInvalidToken(localUserId, error: error);
+        return;
+      }
+      logger.fe(
+        "Failed to switch to account $redactedId.",
+        className: runtimeType.toString(),
+        methodName: 'switchAccount',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      emit(const Unauthenticated(redirectToAccountSelection: true));
     } catch (error, stackTrace) {
       logger.fe(
         "Failed to switch to account $redactedId.",
@@ -261,11 +284,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           ) ==
           ReachabilityStatus.reachable;
 
-      if (isPaperlessServerReachable) {
-      } else {
+      if (!isPaperlessServerReachable) {
         emit(ConnectionFailure(serverUrl: localUserData.serverUrl));
         return;
       }
+
+      // Verify that the stored API token is still accepted by the server.
+      await _getUserProfile();
 
       _store.setLoggedInAppUserId(restoreSessionUserId);
       emit(Authenticated(localUserId: restoreSessionUserId));
@@ -273,6 +298,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         "Session restored for ${redactUserId(restoreSessionUserId)}.",
         className: runtimeType.toString(),
         methodName: 'restoreSession',
+      );
+    } on PaperlessUnauthorizedException catch (error, stackTrace) {
+      if (error.isInvalidToken) {
+        logger.fw(
+          "Stored API token is invalid for ${redactUserId(restoreSessionUserId)}.",
+          className: runtimeType.toString(),
+          methodName: 'restoreSession',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        await handleInvalidToken(restoreSessionUserId, error: error);
+        return;
+      }
+      logger.fe(
+        "Failed to restore session.",
+        className: runtimeType.toString(),
+        methodName: 'restoreSession',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      emit(
+        ConnectionFailure(
+          serverUrl:
+              _store.state.localUserData[restoreSessionUserId]!.serverUrl,
+        ),
       );
     } catch (error, stackTrace) {
       logger.fe(
@@ -289,6 +339,25 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         ),
       );
     }
+  }
+
+  /// Handles an invalidated or revoked API token (HTTP 401) by clearing the
+  /// stored credentials, resetting the session, and redirecting to login.
+  Future<void> handleInvalidToken(String userId, {Object? error}) async {
+    if (state is SessionExpired) {
+      return;
+    }
+    final serverUrl = _store.state.localUserData[userId]?.serverUrl;
+    _sessionManager.resetSettings(broadcast: false);
+    CachedQuery.instance.deleteCache();
+    await _encryptedLocalStore.clear(userId);
+    _store.setLoggedInAppUserId(null);
+    emit(
+      SessionExpired(
+        serverUrl: serverUrl,
+        error: error ?? PaperlessUnauthorizedException(null, statusCode: 401),
+      ),
+    );
   }
 
   Future<void> logout([bool shouldRemoveAccount = false]) async {
@@ -355,7 +424,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final uiSettings = await _getUserProfile();
     final localUserId = _buildLocalUserId(uiSettings, serverUrl);
 
-    if (_store.state.localUserData.containsKey(localUserId)) {
+    if (_store.state.localUserData.containsKey(localUserId) &&
+        await _encryptedLocalStore.contains(localUserId)) {
       throw InfoMessageException(code: ErrorCode.userAlreadyExists);
     }
 

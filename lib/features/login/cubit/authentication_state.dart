@@ -51,6 +51,16 @@ class ConnectionFailure extends AuthenticationState {
   ConnectionFailure({required this.serverUrl});
 }
 
+class SessionExpired extends AuthenticationState with EquatableMixin {
+  final String? serverUrl;
+  final Object? error;
+
+  const SessionExpired({this.serverUrl, this.error});
+
+  @override
+  List<Object?> get props => [serverUrl, error];
+}
+
 class AuthenticationError extends AuthenticationState with EquatableMixin {
   final dynamic error;
   final String serverUrl;
