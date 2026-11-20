@@ -1,0 +1,35 @@
+# Description
+Fixes #715
+
+### Root Cause
+When uploading a multi-page scanned document (10+ high-resolution photos) from the Scanning tab, navigating the upload form and opening/typing in the tag creation flow caused severe UI lag and freezes due to three compounding performance bottlenecks:
+1. **Repeated PDF re-assembly on route rebuilds (`DocumentUploadQueueCoordinator.processQueue`):**
+   `item.loadFileBytes()` was invoked *inside* `MaterialPageRoute.builder`:
+   ```dart
+   MaterialPageRoute(
+     builder: (routeContext) => DocumentUploadPreparationPage(
+       fileBytes: item.loadFileBytes(),
+       ...
+     ),
+   )
+   ```
+   Whenever Flutter re-ran the route builder (e.g., when pushing/popping `FullscreenTagsForm` / `CreateLabelRoute` or during `MediaQuery` / keyboard changes), `loadFileBytes()` was invoked again from scratch — spawning redundant `compute(_assemblePdfBytes, ...)` isolates to re-read all 10+ camera photos and re-encode a multi-dozen-MB PDF.
+2. **Full multi-page PDF rasterization for the 150px header thumbnail (`DocumentUploadPreparationPage`):**
+   Even though page 1 already existed on disk as an image file, `DocumentUploadPreparationPage` waited for the entire assembled PDF `Uint8List` and passed it to `FileThumbnail`, transferring the full multi-dozen-MB PDF over the platform channel to `Printing.raster(...)` just to render a small header preview.
+3. **Unconditional PDF rasterization & unscaled image decoding (`FileThumbnail`) + full-page keyboard rebuilds (`DocumentUploadPreparationPage`):**
+   - `FileThumbnail.initState()` unconditionally called `_convertPdfToPng(...)` even for non-PDF files (images/text), sending large image bytes over the `Printing.raster` platform channel unnecessarily, and decoded camera images at full native resolution without `cacheWidth`.
+   - `DocumentUploadPreparationPage.build()` read `MediaQuery.of(context).viewInsets.bottom`, rebuilding the entire `Scaffold` / `NestedScrollView` / `FormBuilder` on every keyboard animation frame.
+
+### Solution
+- **`DocumentUploadQueueCoordinator`:** Hoisted `final fileBytes = item.loadFileBytes();` out of `MaterialPageRoute.builder` so PDF assembly is initiated strictly once per queued document.
+- **`DocumentUploadQueueItem` & `ScannerPage` & `DocumentUploadPreparationPage`:** Added an optional `File? previewFile` parameter (populated with `documentScan.pageFiles.first` from `ScannerPage._onPrepareDocumentUploadQueue`) so the header renders a lightweight preview directly from page 1 without waiting for or rasterizing the assembled multi-page PDF.
+- **`DocumentUploadPreparationPage`:** Scoped `MediaQuery.viewInsetsOf(context).bottom == 0` inside a `Builder` for `floatingActionButton` so keyboard show/hide animations do not rebuild the entire upload form.
+- **`FileThumbnail`:** Guarded `_convertPdfToPng` so it only runs when `mimeType == 'application/pdf'`, and added `cacheWidth` (scaled by `MediaQuery.devicePixelRatioOf(context)`) to `Image.file` and `Image.memory` so large camera photos are decoded at thumbnail resolution.
+
+### Verification
+- **Widget & Integration Tests:** Added `test/src/features/document_upload/document_upload_performance_test.dart` (3/3 tests passed):
+  - `FileThumbnail` does not trigger PDF rasterization for image files and wraps the image in `ResizeImage` (`cacheWidth`).
+  - `DocumentUploadPreparationPage` renders `previewFile` immediately while `fileBytes` is still assembling in the background.
+  - `DocumentUploadQueueCoordinator.processQueue` invokes `loadFileBytes()` strictly once even across secondary route pushes/pops.
+- **Emulator Verification:** All 3 tests verified on Android Emulator (`Medium_Phone_API_37.0`).
+- **Static Analysis & Formatting:** `fvm dart format` applied; `fvm flutter analyze lib/ test/src/features/document_upload/document_upload_performance_test.dart` reports 0 errors and 0 warnings (0 issues in modified/new files).
