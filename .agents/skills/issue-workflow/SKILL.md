@@ -76,6 +76,21 @@ Identify:
 - Conditions under which the bug occurs (e.g. locale, Android/iOS version, permissions, network state).
 - Community workarounds or hints provided in the thread.
 
+Initialize the issue analysis report in `.git/pr-drafts/issue-<issue-number>-analysis.md` (creating `.git/pr-drafts/` if needed) with **Section 1: Issue Overview**:
+
+```markdown
+# Analysis Report: Issue #<issue-number> - <Short Title>
+
+## 1. Issue Overview
+- **Issue ID**: #<issue-number>
+- **Title**: <Full GitHub issue title>
+- **Components Affected**: <Affected classes, widgets, or modules>
+- **Environment**: <Device, OS, Paperless-ngx version, Paperless-Mobile version, locale>
+
+### Problem Description
+<Concise summary of the reported bug, reproduction steps, and observed vs. expected behavior>
+```
+
 ### Step 2: Set Up a Clean Working Branch
 
 Sync the base development branch with upstream and create an isolated fix branch:
@@ -94,7 +109,25 @@ git checkout -b fix/<short-issue-description>
    ```powershell
    git log -L <start>,<end>:<file>
    ```
-4. **Visual/UI Bugs Pre-Fix Capture:**
+4. **Complete the Analysis Report (Required Before Implementation):**
+   Before modifying any source code in Step 4, complete `.git/pr-drafts/issue-<issue-number>-analysis.md` with the root cause, solution strategy, and verification plan:
+   ```markdown
+   ---
+
+   ## 2. Root Cause Analysis
+   <Detailed technical breakdown of why the bug occurs, referencing exact files, methods, and code paths>
+
+   ---
+
+   ## 3. Solution Strategy
+   <Numbered plan of the architectural and code changes to resolve the root cause cleanly>
+
+   ---
+
+   ## 4. Verification & Testing
+   <Planned unit tests, widget/emulator tests, and visual checks to prove the fix>
+   ```
+5. **Visual/UI Bugs Pre-Fix Capture:**
    - If the issue is a visual defect (layout overflow, alignment error, broken styling, font/icon glitch, missing UI control, dark/light mode bug), reproduce the bug on the emulator.
    - **Crucial Requirement:** The screenshot must capture the **active app screen** showing the defect, never the emulator desktop or launcher.
    - Ensure the screenshots directory exists:
