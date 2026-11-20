@@ -1,0 +1,31 @@
+# Description
+Fixes #725
+
+### Root Cause
+When a user's stored API token is revoked or invalid on the Paperless-ngx server (e.g., after migrating to a new server via `document_exporter`/`document_importer`, or deleting the token in Django Admin), three gaps caused the app to get stuck at startup without showing an error or redirecting to login:
+1. **Unchecked token during session restore:** `AuthenticationCubit.restoreSession()` (and `switchAccount()`) only checked server reachability via `ConnectivityStatusService.isPaperlessServerReachable()` before emitting `Authenticated`, without verifying that the stored API token was still valid.
+2. **HTTP 401 not intercepted:** `DioUnauthorizedInterceptor` only intercepted HTTP `403` (Forbidden) and ignored HTTP `401` (Unauthorized), so `401` responses from `/api/ui_settings/` and `/api/profile/` fell through as generic `ErrorCode.uiSettingsLoadFailed` / `ErrorCode.profileGetError` errors.
+3. **No auth-error handling in `HomeShellWidget`:** When `SessionDataRepository.userProfileQuery` failed on startup, `HomeShellWidget` rendered `SizedBox.shrink()` (or remained stuck on `"Fetching user information..."`) instead of surfacing the auth error and navigating to the login screen. Additionally, `_addUser()` blocked re-authentication for an existing `localUserId` with `ErrorCode.userAlreadyExists`.
+
+### Solution
+- **`PaperlessUnauthorizedException` & `DioUnauthorizedInterceptor`:**
+  - Extended `DioUnauthorizedInterceptor` to intercept both HTTP `401` and `403`, passing `statusCode` to `PaperlessUnauthorizedException`.
+  - Added `bool get isInvalidToken => statusCode == 401` to distinguish invalid/revoked API tokens (`401`) from per-endpoint permission errors (`403`).
+- **`AuthenticationCubit` & `AuthenticationState`:**
+  - Added `SessionExpired(serverUrl, error)` state.
+  - Updated `restoreSession()` and `switchAccount()` to validate the stored token by calling `_getUserProfile()` (`/api/ui_settings/`) after confirming server reachability.
+  - Added `handleInvalidToken(userId, error)` (idempotent) to reset `SessionManager`, clear the query cache, clear the invalid credentials in `EncryptedLocalStore` (without deleting the user's local files), clear `loggedInAppUserId`, and emit `SessionExpired`.
+  - Updated `_addUser()` so re-authenticating an existing `localUserId` whose stored credentials were cleared succeeds instead of throwing `ErrorCode.userAlreadyExists`.
+- **Router & `HomeShellWidget`:**
+  - Handled `SessionExpired` in `main.dart` by displaying the error via `showGenericError` and navigating to `AuthRoute(initialHost: serverUrl)`.
+  - Added defense-in-depth `401` handling in `HomeShellWidget` to delegate to `AuthenticationCubit.handleInvalidToken(...)` if a `401` occurs during profile loading.
+
+### Verification
+- **Unit Tests:** Added `test/src/features/login/authentication_cubit_test.dart` (6/6 tests passed):
+  - `DioUnauthorizedInterceptor` wraps HTTP 401 (`isInvalidToken == true`) and HTTP 403 (`isInvalidToken == false`).
+  - `AuthenticationCubit.restoreSession()` emits `SessionExpired`, clears stored credentials and `loggedInAppUserId`, and resets session on HTTP 401.
+  - `AuthenticationCubit.restoreSession()` emits `Authenticated` when token is valid.
+  - Re-authenticating via `addUser()` succeeds after 401 cleared credentials.
+  - `handleInvalidToken()` is idempotent when already `SessionExpired`.
+- **Emulator Verification:** All 6 tests verified on Android Emulator (`Medium_Phone_API_37.0`).
+- **Static Analysis & Formatting:** `fvm dart format` applied; `fvm flutter analyze lib/ test/src/features/login/authentication_cubit_test.dart` reports 0 errors and 0 warnings (0 issues in modified files).
