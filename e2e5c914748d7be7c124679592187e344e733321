@@ -1,0 +1,27 @@
+# Description
+Fixes #717
+
+### Root Cause
+In `ConsumptionQueueView` (`lib/features/sharing/view/consumption_queue_view.dart`), the per-file action buttons (`ActionChip` for **Upload** and **Discard**) inside `ListTile.subtitle` were laid out in a horizontal `Row`:
+```dart
+subtitle: Row(
+  children: [
+    ActionChip(label: Text(S.of(context)!.upload), ...),
+    const SizedBox(width: 8),
+    ActionChip(label: Text(S.of(context)!.discard), ...),
+  ],
+),
+```
+Alongside the 75px leading `FileThumbnail` and `ListTile` padding, locales with longer button labels — such as French (`"Charger le document"` and `"Abandonner"`) — exceed the available horizontal width on phone screens, causing a `RenderFlex` overflow (54 px on a 1080×2400 phone) and clipping the **Discard** button off-screen without any wrapping or scrolling.
+
+### Solution
+- Replaced `Row` (and the manual `SizedBox(width: 8)` spacer) in `ConsumptionQueueView` with `Wrap(spacing: 8, runSpacing: 4, ...)`.
+- On wide screens or locales with short labels, both `ActionChip`s remain side by side; on narrower screens or locales with longer translations (like French), the second chip wraps cleanly onto the next line without overflowing.
+- Added widget tests in `test/src/features/sharing/consumption_queue_view_test.dart` covering both narrow French layouts (no overflow, both chips within viewport bounds) and wide layouts (chips stay side by side).
+
+### Verification
+- **Widget Tests:** Added `test/src/features/sharing/consumption_queue_view_test.dart` covering French locale on 360px narrow screens and 600px wide screens.
+- **Emulator Verification:** Verified on Android Emulator (`Medium_Phone_API_37.0`) in French locale (`Locale('fr')`). Before the fix, Flutter reported `A RenderFlex overflowed by 54 pixels on the right.` After the fix, both chips render completely inside the viewport with zero layout errors.
+- **Static Analysis:** `fvm flutter analyze lib/ test/src/features/sharing/consumption_queue_view_test.dart` reports 0 errors and 0 warnings (0 issues in modified files).
+- **Formatting:** Formatted with `fvm dart format`.
+- **Visual Comparison:** Before & after screenshots captured in `.git/screenshots/issue-717-before.png` and `.git/screenshots/issue-717-after.png`.
