@@ -30,7 +30,9 @@ class ConsumptionQueueView extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
-                subtitle: Row(
+                subtitle: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     ActionChip(
                       label: Text(S.of(context)!.upload),
@@ -43,7 +45,6 @@ class ConsumptionQueueView extends StatelessWidget {
                         );
                       },
                     ),
-                    const SizedBox(width: 8),
                     ActionChip(
                       label: Text(S.of(context)!.discard),
                       avatar: const Icon(Icons.delete),
